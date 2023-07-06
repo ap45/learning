@@ -246,6 +246,53 @@ public class UserController {
         return userService.searchUsers(searchCriteriaList);
     }
 }
+##################################################################################
+
+
+##### To return all values. Eg John entered, return Jonny, Johnathan      #######
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+public class UserService {
+
+    private final UserRepository userRepository;
+
+    @Autowired
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
+        return userRepository.findAll((root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            for (SearchCriteria criteria : searchCriteriaList) {
+                String key = criteria.getKey();
+                QueryOperation operation = criteria.getOperation();
+                String value = criteria.getValue().toString().toLowerCase();
+
+                // Apply the appropriate operation based on the search criteria
+                if (operation == QueryOperation.EQUALS) {
+                    predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get(key)), "%" + value + "%"));
+                } else if (operation == QueryOperation.NOT_EQUALS) {
+                    predicates.add(criteriaBuilder.notLike(criteriaBuilder.lower(root.get(key)), "%" + value + "%"));
+                }
+                // Add more operations as needed
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        });
+    }
+}
 
 
 
