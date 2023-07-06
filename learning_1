@@ -295,6 +295,87 @@ public class UserService {
 }
 
 
+###############################################################################################################################################################
+
+###### ALL OPERATIONS SERVICE #########
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.stereotype.Service;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Path;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Locale;
+
+@Service
+public class UserService {
+
+    private final UserRepository userRepository;
+
+    @Autowired
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
+        return userRepository.findAll((Root<User> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            for (SearchCriteria criteria : searchCriteriaList) {
+                String key = criteria.getKey();
+                QueryOperation operation = criteria.getOperation();
+                Object value = criteria.getValue();
+
+                Path<Object> path = root.get(key);
+
+                // Apply the appropriate operation based on the search criteria
+                if (operation == QueryOperation.EQUALS) {
+                    predicates.add(criteriaBuilder.equal(path, value));
+                } else if (operation == QueryOperation.NOT_EQUALS) {
+                    predicates.add(criteriaBuilder.notEqual(path, value));
+                } else if (operation == QueryOperation.IN) {
+                    predicates.add(path.in((Collection<?>) value));
+                } else if (operation == QueryOperation.NOT_IN) {
+                    predicates.add(criteriaBuilder.not(path.in((Collection<?>) value)));
+                } else if (operation == QueryOperation.CONTAINS) {
+                    predicates.add(criteriaBuilder.like(criteriaBuilder.lower(path.as(String.class)), "%" + value.toString().toLowerCase(Locale.ROOT) + "%"));
+                } else if (operation == QueryOperation.NOT_CONTAINS) {
+                    predicates.add(criteriaBuilder.notLike(criteriaBuilder.lower(path.as(String.class)), "%" + value.toString().toLowerCase(Locale.ROOT) + "%"));
+                }
+                // Add more operations as needed
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        });
+    }
+}
+
+
+###### ENEUM FOR ALL OPERATIONS  ####################
+
+
+public enum QueryOperation {
+    EQUALS("eq"),
+    NOT_EQUALS("neq"),
+    IN("in"),
+    NOT_IN("not in"),
+    CONTAINS("contains"),
+    NOT_CONTAINS("not contains");
+
+    private final String operator;
+
+    QueryOperation(String operator) {
+        this.operator = operator;
+    }
+
+    public String getOperator() {
+        return operator;
+    }
+}
 
 
 
