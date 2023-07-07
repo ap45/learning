@@ -232,6 +232,99 @@ public class UserService {
 }
 
 
-##############
+##############  FOR MULTIPLE CONUNTIRES ###########
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
+        Specification<User> spec = buildSpecification(searchCriteriaList);
+        return userRepository.findAll(spec);
+    }
+
+    private Specification<User> buildSpecification(List<SearchCriteria> searchCriteriaList) {
+        Specification<User> spec = Specification.where(null);
+
+        for (SearchCriteria criteria : searchCriteriaList) {
+            String key = criteria.getKey();
+            QueryOperation operation = criteria.getOperation();
+            Object value = criteria.getValue();
+
+            if (key.equals("country") && value instanceof Object[]) {
+                Object[] values = (Object[]) value;
+
+                switch (operation) {
+                    case EQUALS:
+                        spec = spec.and((root, query, builder) -> root.get(key).in(values));
+                        break;
+                    case NOT_EQUALS:
+                        spec = spec.and((root, query, builder) -> builder.not(root.get(key)).in(values));
+                        break;
+                    case IN:
+                        spec = spec.and((root, query, builder) -> root.get(key).in(values));
+                        break;
+                    case NOT_IN:
+                        spec = spec.and((root, query, builder) -> builder.not(root.get(key)).in(values));
+                        break;
+                    case CONTAINS:
+                        spec = spec.and((root, query, builder) -> {
+                            Predicate[] predicates = Arrays.stream(values)
+                                    .map(v -> builder.like(root.get(key), "%" + v + "%"))
+                                    .toArray(Predicate[]::new);
+                            return builder.or(predicates);
+                        });
+                        break;
+                    case NOT_CONTAINS:
+                        spec = spec.and((root, query, builder) -> {
+                            Predicate[] predicates = Arrays.stream(values)
+                                    .map(v -> builder.notLike(root.get(key), "%" + v + "%"))
+                                    .toArray(Predicate[]::new);
+                            return builder.and(predicates);
+                        });
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid operation: " + operation);
+                }
+            } else {
+                Predicate predicate;
+
+                switch (operation) {
+                    case EQUALS:
+                        predicate = (root, query, builder) -> builder.equal(root.get(key), value);
+                        break;
+                    case NOT_EQUALS:
+                        predicate = (root, query, builder) -> builder.notEqual(root.get(key), value);
+                        break;
+                    case IN:
+                        predicate = (root, query, builder) -> builder.in(root.get(key)).value(value);
+                        break;
+                    case NOT_IN:
+                        predicate = (root, query, builder) -> builder.not(root.get(key)).in(value);
+                        break;
+                    case CONTAINS:
+                        predicate = (root, query, builder) ->
+                                builder.like(builder.lower(root.get(key)), "%" + value.toString().toLowerCase() + "%");
+                        break;
+                    case NOT_CONTAINS:
+                        predicate = (root, query, builder) ->
+                                builder.notLike(builder.lower(root.get(key)), "%" + value.toString().toLowerCase() + "%");
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid operation: " + operation);
+                }
+
+                spec = spec.and(predicate);
+            }
+        }
+
+        return spec;
+    }
+}
+
 
 
