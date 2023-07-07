@@ -1,0 +1,72 @@
+################ NEW LOGIC #################
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
+        return userRepository.findAll((root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            for (SearchCriteria criteria : searchCriteriaList) {
+                String queryKey = criteria.getQueryKey();
+                QueryOperation queryOperation = criteria.getQueryOperation();
+                Object queryValue = criteria.getQueryValue();
+
+                if (queryValue instanceof String) {
+                    String singleValue = (String) queryValue;
+                    Expression<String> expression = root.get(queryKey).as(String.class);
+
+                    switch (queryOperation) {
+                        case EQUALS:
+                            predicates.add(criteriaBuilder.equal(expression, singleValue));
+                            break;
+                        case NOT_EQUALS:
+                            predicates.add(criteriaBuilder.notEqual(expression, singleValue));
+                            break;
+                        case CONTAINS:
+                            predicates.add(criteriaBuilder.like(expression, "%" + singleValue + "%"));
+                            break;
+                        case NOT_CONTAINS:
+                            predicates.add(criteriaBuilder.notLike(expression, "%" + singleValue + "%"));
+                            break;
+                        default:
+                            throw new IllegalArgumentException("Invalid query operation for query key " + queryKey + ": " + queryOperation);
+                    }
+                } else if (queryValue instanceof List) {
+                    List<String> valueList = (List<String>) queryValue;
+                    Expression<String> expression = root.get(queryKey).as(String.class);
+
+                    List<Predicate> innerPredicates = new ArrayList<>();
+
+                    for (String value : valueList) {
+                        switch (queryOperation) {
+                            case EQUALS:
+                                innerPredicates.add(criteriaBuilder.equal(expression, value));
+                                break;
+                            case NOT_EQUALS:
+                                innerPredicates.add(criteriaBuilder.notEqual(expression, value));
+                                break;
+                            case CONTAINS:
+                                innerPredicates.add(criteriaBuilder.like(expression, "%" + value + "%"));
+                                break;
+                            case NOT_CONTAINS:
+                                innerPredicates.add(criteriaBuilder.notLike(expression, "%" + value + "%"));
+                                break;
+                            default:
+                                throw new IllegalArgumentException("Invalid query operation for query key " + queryKey + ": " + queryOperation);
+                        }
+                    }
+
+                    predicates.add(criteriaBuilder.or(innerPredicates.toArray(new Predicate[0])));
+                }
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        });
+    }
+}
