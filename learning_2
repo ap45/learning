@@ -151,6 +151,87 @@ public class UserController {
 }
 
 
+
+
+################ OTHER LOGIC IN SERVICE LAYER ##########################
+
+
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
+        Specification<User> spec = buildSpecification(searchCriteriaList);
+        return userRepository.findAll(spec);
+    }
+
+    private Specification<User> buildSpecification(List<SearchCriteria> searchCriteriaList) {
+        Specification<User> spec = Specification.where(null);
+
+        for (SearchCriteria criteria : searchCriteriaList) {
+            String key = criteria.getKey();
+            QueryOperation operation = criteria.getOperation();
+            Object value = criteria.getValue();
+
+            Specification<User> userSpec = createSpecification(key, operation, value);
+            spec = spec.and(userSpec);
+        }
+
+        return spec;
+    }
+
+    private Specification<User> createSpecification(String key, QueryOperation operation, Object value) {
+        return (root, query, builder) -> {
+            if (key.equals("country") && value instanceof Object[]) {
+                Object[] values = (Object[]) value;
+                Path<String> path = root.get(key);
+
+                switch (operation) {
+                    case EQUALS:
+                        return path.in(values);
+                    case NOT_EQUALS:
+                        return builder.not(path.in(values));
+                    case IN:
+                        return path.in(values);
+                    case NOT_IN:
+                        return builder.not(path.in(values));
+                    case CONTAINS:
+                        return path.in(values);
+                    case NOT_CONTAINS:
+                        return builder.not(path.in(values));
+                    default:
+                        throw new IllegalArgumentException("Invalid operation: " + operation);
+                }
+            } else {
+                Path<?> path = root.get(key);
+
+                switch (operation) {
+                    case EQUALS:
+                        return builder.equal(path, value);
+                    case NOT_EQUALS:
+                        return builder.notEqual(path, value);
+                    case IN:
+                        throw new IllegalArgumentException("Invalid operation: " + operation + " for key: " + key);
+                    case NOT_IN:
+                        throw new IllegalArgumentException("Invalid operation: " + operation + " for key: " + key);
+                    case CONTAINS:
+                        return builder.like(builder.lower(path), "%" + value.toString().toLowerCase() + "%");
+                    case NOT_CONTAINS:
+                        return builder.notLike(builder.lower(path), "%" + value.toString().toLowerCase() + "%");
+                    default:
+                        throw new IllegalArgumentException("Invalid operation: " + operation);
+                }
+            }
+        };
+    }
+}
+
+
 ##############
 
 
