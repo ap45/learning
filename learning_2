@@ -1,0 +1,156 @@
+############# LOGIC FOR  MULITPLE COUNTRIES ################
+
+### ENUM ########
+
+
+public enum QueryOperation {
+    EQ("equals"),
+    NEQ("not equals"),
+    IN("in"),
+    NOT_IN("not in"),
+    CONTAINS("contains"),
+    NOT_CONTAINS("not contains");
+
+    private final String databaseOperation;
+
+    QueryOperation(String databaseOperation) {
+        this.databaseOperation = databaseOperation;
+    }
+
+    public String getDatabaseOperation() {
+        return databaseOperation;
+    }
+}
+
+
+##### QueryOperation #######
+public enum QueryOperation {
+    EQ("equals"),
+    NEQ("not equals"),
+    IN("in"),
+    NOT_IN("not in"),
+    CONTAINS("contains"),
+    NOT_CONTAINS("not contains");
+
+    private final String databaseOperation;
+
+    QueryOperation(String databaseOperation) {
+        this.databaseOperation = databaseOperation;
+    }
+
+    public String getDatabaseOperation() {
+        return databaseOperation;
+    }
+}
+
+
+
+### REPOSITORY #####
+
+@Repository
+public interface UserRepository extends JpaRepository<User, Long> {
+    List<User> findAll(Specification<User> spec);
+}
+
+
+###### SERVICE #######
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
+        Specification<User> spec = buildSpecification(searchCriteriaList);
+        return userRepository.findAll(spec);
+    }
+
+    private Specification<User> buildSpecification(List<SearchCriteria> searchCriteriaList) {
+        Specification<User> spec = Specification.where(null);
+
+        for (SearchCriteria criteria : searchCriteriaList) {
+            String key = criteria.getKey();
+            QueryOperation operation = criteria.getOperation();
+            Object value = criteria.getValue();
+
+            Predicate predicate;
+
+            switch (operation) {
+                case EQ:
+                    predicate = createEqualsPredicate(key, value);
+                    break;
+                case NEQ:
+                    predicate = createNotEqualsPredicate(key, value);
+                    break;
+                case IN:
+                    predicate = createInPredicate(key, value);
+                    break;
+                case NOT_IN:
+                    predicate = createNotInPredicate(key, value);
+                    break;
+                case CONTAINS:
+                    predicate = createContainsPredicate(key, value);
+                    break;
+                case NOT_CONTAINS:
+                    predicate = createNotContainsPredicate(key, value);
+                    break;
+                default:
+                    throw new IllegalArgumentException("Invalid operation: " + operation);
+            }
+
+            spec = spec.and(predicate);
+        }
+
+        return spec;
+    }
+
+    private Predicate createEqualsPredicate(String key, Object value) {
+        return (root, query, builder) -> builder.equal(root.get(key), value);
+    }
+
+    private Predicate createNotEqualsPredicate(String key, Object value) {
+        return (root, query, builder) -> builder.notEqual(root.get(key), value);
+    }
+
+    private Predicate createInPredicate(String key, Object value) {
+        return (root, query, builder) -> root.get(key).in((Object[]) value);
+    }
+
+    private Predicate createNotInPredicate(String key, Object value) {
+        return (root, query, builder) -> builder.not(root.get(key)).in((Object[]) value);
+    }
+
+    private Predicate createContainsPredicate(String key, Object value) {
+        return (root, query, builder) -> builder.like(root.get(key), "%" + value + "%");
+    }
+
+    private Predicate createNotContainsPredicate(String key, Object value) {
+        return (root, query, builder) -> builder.notLike(root.get(key), "%" + value + "%");
+    }
+}
+
+
+####### CONTROLLER ###########
+
+@RestController
+@RequestMapping("/users")
+public class UserController {
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @PostMapping("/search")
+    public List<User> searchUsers(@RequestBody List<SearchCriteria> searchCriteriaList) {
+        return userService.searchUsers(searchCriteriaList);
+    }
+}
+
+
+##############
+
+
