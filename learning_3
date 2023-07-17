@@ -279,3 +279,139 @@ public class UserService {
                 .collect(Collectors.toList());
     }
 }
+
+
+
+
+
+
+##### New logic #####
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
+        return userRepository.findAll((root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            for (SearchCriteria criteria : searchCriteriaList) {
+                String queryKey = criteria.getQueryKey().toLowerCase();
+                QueryOperation queryOperation = criteria.getQueryOperation();
+                Object queryValue = criteria.getQueryValue();
+
+                Expression<String> expression = root.get(queryKey).as(String.class);
+                Predicate predicate;
+
+                switch (queryOperation) {
+                    case EQUALS:
+                        predicate = buildEqualsPredicate(criteriaBuilder, expression, queryValue);
+                        break;
+                    case NOT_EQUALS:
+                        predicate = buildNotEqualsPredicate(criteriaBuilder, expression, queryValue);
+                        break;
+                    case IN:
+                        predicate = buildInPredicate(criteriaBuilder, expression, queryValue);
+                        break;
+                    case NOT_IN:
+                        predicate = buildNotInPredicate(criteriaBuilder, expression, queryValue);
+                        break;
+                    case CONTAINS:
+                        predicate = buildContainsPredicate(criteriaBuilder, expression, queryValue);
+                        break;
+                    case NOT_CONTAINS:
+                        predicate = buildNotContainsPredicate(criteriaBuilder, expression, queryValue);
+                        break;
+                    default:
+                        throw new IllegalArgumentException("Invalid query operation for query key " + queryKey + ": " + queryOperation);
+                }
+
+                predicates.add(predicate);
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        });
+    }
+
+    private Predicate buildEqualsPredicate(CriteriaBuilder criteriaBuilder, Expression<String> expression, Object queryValue) {
+        if (queryValue instanceof List) {
+            List<String> values = convertValuesToLowerCase((List<String>) queryValue);
+            return expression.in(values);
+        } else {
+            return criteriaBuilder.equal(expression, convertValueToLowerCase(queryValue));
+        }
+    }
+
+    private Predicate buildNotEqualsPredicate(CriteriaBuilder criteriaBuilder, Expression<String> expression, Object queryValue) {
+        if (queryValue instanceof List) {
+            List<String> values = convertValuesToLowerCase((List<String>) queryValue);
+            return criteriaBuilder.not(expression.in(values));
+        } else {
+            return criteriaBuilder.notEqual(expression, convertValueToLowerCase(queryValue));
+        }
+    }
+
+    private Predicate buildInPredicate(CriteriaBuilder criteriaBuilder, Expression<String> expression, Object queryValue) {
+        if (queryValue instanceof List) {
+            List<String> values = convertValuesToLowerCase((List<String>) queryValue);
+            return criteriaBuilder.isTrue(criteriaBuilder.function("member", Boolean.class, expression, criteriaBuilder.literal(values)));
+        } else {
+            return criteriaBuilder.equal(expression, convertValueToLowerCase(queryValue));
+        }
+    }
+
+    private Predicate buildNotInPredicate(CriteriaBuilder criteriaBuilder, Expression<String> expression, Object queryValue) {
+        if (queryValue instanceof List) {
+            List<String> values = convertValuesToLowerCase((List<String>) queryValue);
+            return criteriaBuilder.isFalse(criteriaBuilder.function("member", Boolean.class, expression, criteriaBuilder.literal(values)));
+        } else {
+            return criteriaBuilder.notEqual(expression, convertValueToLowerCase(queryValue));
+        }
+    }
+
+    private Predicate buildContainsPredicate(CriteriaBuilder criteriaBuilder, Expression<String> expression, Object queryValue) {
+        if (queryValue instanceof List) {
+            List<String> values = convertValuesToLowerCase((List<String>) queryValue);
+            List<Predicate> containsPredicates = new ArrayList<>();
+            for (String value : values) {
+                containsPredicates.add(criteriaBuilder.like(expression, "%" + convertValueToLowerCase(value) + "%"));
+            }
+            return criteriaBuilder.or(containsPredicates.toArray(new Predicate[0]));
+        } else {
+            String value = convertValueToLowerCase(queryValue);
+            return criteriaBuilder.like(expression, "%" + value + "%");
+        }
+    }
+
+    private Predicate buildNotContainsPredicate(CriteriaBuilder criteriaBuilder, Expression<String> expression, Object queryValue) {
+        if (queryValue instanceof List) {
+            List<String> values = convertValuesToLowerCase((List<String>) queryValue);
+            List<Predicate> notContainsPredicates = new ArrayList<>();
+            for (String value : values) {
+                notContainsPredicates.add(criteriaBuilder.notLike(expression, "%" + convertValueToLowerCase(value) + "%"));
+            }
+            return criteriaBuilder.and(notContainsPredicates.toArray(new Predicate[0]));
+        } else {
+            String value = convertValueToLowerCase(queryValue);
+            return criteriaBuilder.notLike(expression, "%" + value + "%");
+        }
+    }
+
+    private String convertValueToLowerCase(Object value) {
+        if (value instanceof String) {
+            return ((String) value).toLowerCase();
+        }
+        return value.toString();
+    }
+
+    private List<String> convertValuesToLowerCase(List<String> values) {
+        return values.stream()
+                .map(String::toLowerCase)
+                .collect(Collectors.toList());
+    }
+}
+
+
