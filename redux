@@ -1,0 +1,92 @@
+import React, { useEffect } from 'react';
+import { useSelector, useDispatch } from 'react-redux';
+import { DataGrid } from '@mui/x-data-grid';
+import { querySearchAction } from './path/to/profileActions';
+
+const ProfileDataGrid = () => {
+  const dispatch = useDispatch();
+  const { data, total, isLoading } = useSelector((state) => state.profileState);
+  const pageSize = 10; // Number of items per page
+  const [page, setPage] = React.useState(1);
+
+  useEffect(() => {
+    // Fetch data from the backend using the querySearchAction when the page changes
+    dispatch(querySearchAction([{ queryKey: 'some_key', queryOperator: 'equals', queryValue: 'some_value' }], page, pageSize));
+  }, [page]);
+
+  const handlePageChange = (newPage) => {
+    setPage(newPage);
+  };
+
+  const columns = [
+    // Define your DataGrid columns here
+    // Example: { field: 'id', headerName: 'ID', width: 100 },
+  ];
+
+  return (
+    <div style={{ height: 400, width: '100%' }}>
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <DataGrid
+          rows={data}
+          columns={columns}
+          pagination
+          pageSize={pageSize}
+          rowCount={total}
+          paginationMode="server" // Use server-side pagination
+          onPageChange={(params) => handlePageChange(params.page)}
+        />
+      )}
+    </div>
+  );
+};
+
+export default ProfileDataGrid;
+
+
+
+
+
+##################################################
+
+import React, { useEffect } from 'react';
+import { useDispatch, useSelector } from 'react-redux';
+import { DataGrid } from '@mui/x-data-grid';
+import { fetchSearchResults } from './path/to/actions';
+
+const ProfileDataGrid = () => {
+  const dispatch = useDispatch();
+  const { profileData, totalResults, page, pageSize } = useSelector((state) => state.profileData);
+
+  useEffect(() => {
+    // Replace the 'searchObject' with the actual search object you want to use
+    dispatch(fetchSearchResults(searchObject, page, pageSize));
+  }, [dispatch, page, pageSize]);
+
+  const handlePageChange = (newPage) => {
+    // Dispatch the action with the updated page and pageSize
+    dispatch(fetchSearchResults(searchObject, newPage, pageSize));
+  };
+
+  const columns = [
+    // Define your DataGrid columns here
+    // Example: { field: 'id', headerName: 'ID', width: 100 },
+  ];
+
+  return (
+    <div style={{ height: 400, width: '100%' }}>
+      <DataGrid
+        rows={profileData}
+        columns={columns}
+        pagination
+        pageSize={pageSize}
+        rowCount={totalResults}
+        paginationMode="server" // Use server-side pagination
+        onPageChange={(params) => handlePageChange(params.page)}
+      />
+    </div>
+  );
+};
+
+export default ProfileDataGrid;
