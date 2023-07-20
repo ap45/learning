@@ -1,163 +1,138 @@
-######new logiccc #####
+### NEW LOGIC ####
+
+@Entity
+@Table(name = "main_profile")
+public class MainProfile {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+    
+    private String name;
+    
+    private LocalDate dob;
+    
+    private String status;
+    
+    @OneToMany(mappedBy = "mainProfile", cascade = CascadeType.ALL)
+    private List<Source> sourceList = new ArrayList<>();
+    
+    // Other columns and getters/setters as needed
+
+}
 
 
 
 @Entity
-@Table(name = "profiles")
-public class Profile {
+@Table(name = "source")
+public class Source {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    private String name;
+    private String value;
+    
+    @ManyToOne
+    @JoinColumn(name = "profile_id")
+    private MainProfile mainProfile;
+    
+    // Getters/setters and constructors as needed
 
-    private LocalDate dob;
-
-    private String status;
-
-    @ElementCollection
-    @CollectionTable(name = "profile_source_lists", joinColumns = @JoinColumn(name = "profile_id"))
-    @Column(name = "source")
-    private List<String> sourceList;
-
-    private String countries;
-
-    // Getters and setters
 }
 
- 
-##### service layer ####
+
+######## SERVICE ###########333
 @Service
-public class ProfileService {
+public class MainProfileService {
 
     @Autowired
-    private ProfileRepository profileRepository;
+    private MainProfileRepository mainProfileRepository;
 
-    public Profile createProfile(Profile profile) {
-        return profileRepository.save(profile);
+    @Autowired
+    private EntityManager entityManager;
+
+    public MainProfile createProfile(MainProfile mainProfile) {
+        return mainProfileRepository.save(mainProfile);
     }
 
-    public List<Profile> searchProfiles(List<SearchCriteria> searchCriteria, String sortColumn, String sortDirection) {
+    public List<MainProfile> searchProfiles(List<SearchCriteria> searchCriteriaList) {
         CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Profile> query = criteriaBuilder.createQuery(Profile.class);
-        Root<Profile> root = query.from(Profile.class);
+        CriteriaQuery<MainProfile> criteriaQuery = criteriaBuilder.createQuery(MainProfile.class);
+        Root<MainProfile> root = criteriaQuery.from(MainProfile.class);
+
         List<Predicate> predicates = new ArrayList<>();
-
-        for (SearchCriteria criteria : searchCriteria) {
-            String key = criteria.getQueryKey();
-            QueryOperation operation = criteria.getQueryOperation();
-            Object value = criteria.getQueryValue();
-
-            Path<?> path = getPath(root, key);
-            Predicate predicate;
+        for (SearchCriteria criteria : searchCriteriaList) {
+            String key = criteria.getKey();
+            QueryOperation operation = criteria.getOperation();
+            Object value = criteria.getValue();
 
             switch (operation) {
                 case EQUALS:
-                    predicate = criteriaBuilder.equal(path, value);
+                    predicates.add(criteriaBuilder.equal(root.get(key), value));
                     break;
                 case NOT_EQUALS:
-                    predicate = criteriaBuilder.notEqual(path, value);
+                    predicates.add(criteriaBuilder.notEqual(root.get(key), value));
                     break;
                 case IN:
                     if (value instanceof List) {
-                        predicate = path.in((List<?>) value);
+                        predicates.add(root.get(key).in((List<?>) value));
                     } else {
-                        predicate = criteriaBuilder.equal(path, value);
+                        predicates.add(criteriaBuilder.equal(root.get(key), value));
                     }
                     break;
                 case NOT_IN:
                     if (value instanceof List) {
-                        predicate = criteriaBuilder.not(path.in((List<?>) value));
+                        predicates.add(criteriaBuilder.not(root.get(key).in((List<?>) value)));
                     } else {
-                        predicate = criteriaBuilder.notEqual(path, value);
+                        predicates.add(criteriaBuilder.notEqual(root.get(key), value));
                     }
                     break;
                 case CONTAINS:
-                    if (value instanceof String) {
-                        predicate = criteriaBuilder.like(path.as(String.class), "%" + value + "%");
+                    if (value instanceof List) {
+                        for (Object item : (List<?>) value) {
+                            predicates.add(criteriaBuilder.like(root.get(key), "%" + item + "%"));
+                        }
                     } else {
-                        throw new IllegalArgumentException("Invalid query value for CONTAINS operation");
+                        predicates.add(criteriaBuilder.like(root.get(key), "%" + value + "%"));
                     }
                     break;
                 case NOT_CONTAINS:
-                    if (value instanceof String) {
-                        predicate = criteriaBuilder.notLike(path.as(String.class), "%" + value + "%");
+                    if (value instanceof List) {
+                        for (Object item : (List<?>) value) {
+                            predicates.add(criteriaBuilder.notLike(root.get(key), "%" + item + "%"));
+                        }
                     } else {
-                        throw new IllegalArgumentException("Invalid query value for NOT_CONTAINS operation");
+                        predicates.add(criteriaBuilder.notLike(root.get(key), "%" + value + "%"));
                     }
                     break;
-                default:
-                    throw new IllegalArgumentException("Invalid query operation: " + operation);
             }
-
-            predicates.add(predicate);
         }
 
-        query.where(criteriaBuilder.and(predicates.toArray(new Predicate[0])));
-
-        List<Profile> profiles = entityManager.createQuery(query).getResultList();
-
-        if (sortColumn != null && sortDirection != null) {
-            profiles.sort((p1, p2) -> {
-                Comparable<Object> fieldValue1 = (Comparable<Object>) getFieldValue(p1, sortColumn);
-                Comparable<Object> fieldValue2 = (Comparable<Object>) getFieldValue(p2, sortColumn);
-
-                int result = fieldValue1.compareTo(fieldValue2);
-                return sortDirection.equalsIgnoreCase("desc") ? -result : result;
-            });
-        }
-
-        return profiles;
-    }
-
-    private Path<?> getPath(Root<Profile> root, String key) {
-        if (key.equals("sourceList")) {
-            return root.join(key);
-        } else {
-            return root.get(key);
-        }
-    }
-
-    private Object getFieldValue(Profile profile, String columnName) {
-        try {
-            Field field = Profile.class.getDeclaredField(columnName);
-            field.setAccessible(true);
-            return field.get(profile);
-        } catch (Exception e) {
-            throw new IllegalArgumentException("Invalid sort column: " + columnName);
-        }
+        criteriaQuery.where(predicates.toArray(new Predicate[0]));
+        return entityManager.createQuery(criteriaQuery).getResultList();
     }
 }
 
 
-
-
-## controller ####
+###### CONTROLLER #########
 
 @RestController
 @RequestMapping("/profiles")
-public class ProfileController {
+public class MainProfileController {
 
     @Autowired
-    private ProfileService profileService;
+    private MainProfileService mainProfileService;
 
-    @PostMapping
-    public ResponseEntity<Profile> createProfile(@RequestBody Profile profile) {
-        Profile createdProfile = profileService.createProfile(profile);
+    @PostMapping("/create")
+    public ResponseEntity<MainProfile> createProfile(@RequestBody MainProfile mainProfile) {
+        MainProfile createdProfile = mainProfileService.createProfile(mainProfile);
         return ResponseEntity.ok(createdProfile);
     }
 
     @PostMapping("/search")
-    public ResponseEntity<List<Profile>> searchProfiles(
-            @RequestBody List<SearchCriteria> searchCriteria,
-            @RequestParam(required = false) String sortColumn,
-            @RequestParam(required = false) String sortDirection
-    ) {
-        List<Profile> profiles = profileService.searchProfiles(searchCriteria, sortColumn, sortDirection);
-        return ResponseEntity.ok(profiles);
+    public ResponseEntity<List<MainProfile>> searchProfiles(@RequestBody List<SearchCriteria> searchCriteriaList) {
+        List<MainProfile> result = mainProfileService.searchProfiles(searchCriteriaList);
+        return ResponseEntity.ok(result);
     }
 }
-
-
-
