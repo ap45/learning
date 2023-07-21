@@ -1,384 +1,89 @@
-###### ENUM ##########
+@Entity
+@Table(name = "profiles")
+public class Profile {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-public enum QueryOperation {
-    EQUALS("="),
-    CONTAINS("like"),
-    GREATER_THAN(">"),
-    // Add more operations as needed
+    private String name;
+    private LocalDate dob;
+    private String status;
 
-    private final String operator;
+    @ManyToMany
+    @JoinTable(name = "profile_source",
+               joinColumns = @JoinColumn(name = "profile_id"),
+               inverseJoinColumns = @JoinColumn(name = "source_id"))
+    private Set<Source> sourceList = new HashSet<>();
 
-    QueryOperation(String operator) {
-        this.operator = operator;
-    }
-
-    public String getOperator() {
-        return operator;
-    }
+    // Getters and setters
 }
 
 
-#######  Search CRIteria #########
+@Entity
+@Table(name = "sources")
+public class Source {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
 
-public class SearchCriteria {
-    private String key;
-    private QueryOperation operation;
-    private Object value;
+    private String sourceName;
 
-    // Constructor, getters, and setters
+    // Getters and setters
 }
 
 
 
+@Repository
+public class ProfileRepositoryImpl implements ProfileRepositoryCustom {
 
+    @PersistenceContext
+    private EntityManager entityManager;
 
-######## Controller ###########
+    @Override
+    public List<Profile> findByCriteria(List<SearchCriteria> criteria) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Profile> query = cb.createQuery(Profile.class);
+        Root<Profile> root = query.from(Profile.class);
 
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
+        List<Predicate> predicates = new ArrayList<>();
+        for (SearchCriteria criterion : criteria) {
+            String key = criterion.getQueryKey();
+            QueryOperation operation = criterion.getQueryOperation();
+            Object value = criterion.getQueryValue();
 
-import java.util.List;
-
-@RestController
-public class UserController {
-
-    private final UserRepository userRepository;
-
-    @Autowired
-    public UserController(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    @PostMapping("/users/search")
-    public List<User> searchUsers(@RequestBody List<SearchCriteria> searchCriteriaList) {
-        // Convert search criteria list to JPA Specification
-        Specification<User> specification = createSpecification(searchCriteriaList);
-
-        // Use the specification to search for users
-        return userRepository.findAll(specification);
-    }
-
-    private Specification<User> createSpecification(List<SearchCriteria> searchCriteriaList) {
-        return (root, query, criteriaBuilder) -> {
-            Predicate predicate = criteriaBuilder.conjunction();
-
-            for (SearchCriteria criteria : searchCriteriaList) {
-                String key = criteria.getKey();
-                String operation = criteria.getOperation();
-                Object value = criteria.getValue();
-
-                // Apply the appropriate operation based on the search criteria
-                if (operation.equals("equals")) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get(key), value));
-                } else if (operation.equals("contains")) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.like(root.get(key), "%" + value + "%"));
-                } else if (operation.equals("greaterThan")) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.greaterThan(root.get(key), (Comparable) value));
-                }
-                // Add more operations as needed
-
+            switch (operation) {
+                case EQUALS:
+                    predicates.add(cb.equal(root.get(key), value));
+                    break;
+                case NOT_EQUALS:
+                    predicates.add(cb.notEqual(root.get(key), value));
+                    break;
+                case IN:
+                    if (value instanceof List) {
+                        predicates.add(root.get(key).in((List<?>) value));
+                    }
+                    break;
+                case NOT_IN:
+                    if (value instanceof List) {
+                        predicates.add(cb.not(root.get(key).in((List<?>) value)));
+                    }
+                    break;
+                case CONTAINS:
+                    if (value instanceof String) {
+                        predicates.add(cb.like(root.get(key), "%" + value + "%"));
+                    }
+                    break;
+                case NOT_CONTAINS:
+                    if (value instanceof String) {
+                        predicates.add(cb.notLike(root.get(key), "%" + value + "%"));
+                    }
+                    break;
+                // Add other cases for additional QueryOperation values if needed.
             }
+        }
 
-            return predicate;
-        };
+        query.where(cb.and(predicates.toArray(new Predicate[0])));
+        TypedQuery<Profile> typedQuery = entityManager.createQuery(query);
+        return typedQuery.getResultList();
     }
 }
-
-######################################################################################################################################################333
-
-
-
-#### ENUM  ####
-
-public enum QueryOperation {
-    EQUALS("eq"),
-    NOT_EQUALS("neq");
-
-    private final String operator;
-
-    QueryOperation(String operator) {
-        this.operator = operator;
-    }
-
-    public String getOperator() {
-        return operator;
-    }
-}
-
-
-##### SEARCH CRITERIA ##########
-public class SearchCriteria {
-    private String key;
-    private QueryOperation operation;
-    private Object value;
-
-    // Constructor, getters, and setters
-}
-
-
-
-########## COntroller ##############3
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
-
-import javax.persistence.criteria.Predicate;
-import java.util.List;
-
-@RestController
-public class UserController {
-
-    private final UserRepository userRepository;
-
-    @Autowired
-    public UserController(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    @PostMapping("/users/search")
-    public List<User> searchUsers(@RequestBody List<SearchCriteria> searchCriteriaList) {
-        Specification<User> specification = createSpecification(searchCriteriaList);
-        return userRepository.findAll(specification);
-    }
-
-    private Specification<User> createSpecification(List<SearchCriteria> searchCriteriaList) {
-        return (root, query, criteriaBuilder) -> {
-            Predicate predicate = criteriaBuilder.conjunction();
-
-            for (SearchCriteria criteria : searchCriteriaList) {
-                String key = criteria.getKey();
-                QueryOperation operation = criteria.getOperation();
-                Object value = criteria.getValue();
-
-                // Apply the appropriate operation based on the search criteria
-                if (operation == QueryOperation.EQUALS) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get(key), value));
-                } else if (operation == QueryOperation.NOT_EQUALS) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.notEqual(root.get(key), value));
-                }
-                // Add more operations as needed
-            }
-
-            return predicate;
-        };
-    }
-}
-
-
-
-####################################################################################################################################
-
-
-
-
-##### SERVICE LAYER
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import java.util.List;
-
-@Service
-public class UserService {
-
-    private final UserRepository userRepository;
-
-    @Autowired
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
-        Specification<User> specification = createSpecification(searchCriteriaList);
-        return userRepository.findAll(specification);
-    }
-
-    private Specification<User> createSpecification(List<SearchCriteria> searchCriteriaList) {
-        return (root, query, criteriaBuilder) -> {
-            Predicate predicate = criteriaBuilder.conjunction();
-
-            for (SearchCriteria criteria : searchCriteriaList) {
-                String key = criteria.getKey();
-                QueryOperation operation = criteria.getOperation();
-                Object value = criteria.getValue();
-
-                // Apply the appropriate operation based on the search criteria
-                if (operation == QueryOperation.EQUALS) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(root.get(key), value));
-                } else if (operation == QueryOperation.NOT_EQUALS) {
-                    predicate = criteriaBuilder.and(predicate, criteriaBuilder.notEqual(root.get(key), value));
-                }
-                // Add more operations as needed
-            }
-
-            return predicate;
-        };
-    }
-}
-
-
-
-#### CONTROLLER ##########
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RestController;
-
-import java.util.List;
-
-@RestController
-public class UserController {
-
-    private final UserService userService;
-
-    @Autowired
-    public UserController(UserService userService) {
-        this.userService = userService;
-    }
-
-    @PostMapping("/users/search")
-    public List<User> searchUsers(@RequestBody List<SearchCriteria> searchCriteriaList) {
-        return userService.searchUsers(searchCriteriaList);
-    }
-}
-##################################################################################
-
-
-##### To return all values. Eg John entered, return Jonny, Johnathan      #######
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-
-import javax.persistence.criteria.CriteriaBuilder;
-import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Predicate;
-import javax.persistence.criteria.Root;
-import java.util.ArrayList;
-import java.util.List;
-
-@Service
-public class UserService {
-
-    private final UserRepository userRepository;
-
-    @Autowired
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
-        return userRepository.findAll((root, query, criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            for (SearchCriteria criteria : searchCriteriaList) {
-                String key = criteria.getKey();
-                QueryOperation operation = criteria.getOperation();
-                String value = criteria.getValue().toString().toLowerCase();
-
-                // Apply the appropriate operation based on the search criteria
-                if (operation == QueryOperation.EQUALS) {
-                    predicates.add(criteriaBuilder.like(criteriaBuilder.lower(root.get(key)), "%" + value + "%"));
-                } else if (operation == QueryOperation.NOT_EQUALS) {
-                    predicates.add(criteriaBuilder.notLike(criteriaBuilder.lower(root.get(key)), "%" + value + "%"));
-                }
-                // Add more operations as needed
-            }
-
-            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-        });
-    }
-}
-
-
-###############################################################################################################################################################
-
-###### ALL OPERATIONS SERVICE #########
-
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.stereotype.Service;
-import javax.persistence.criteria.CriteriaBuilder;
-import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Path;
-import javax.persistence.criteria.Predicate;
-import javax.persistence.criteria.Root;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.List;
-import java.util.Locale;
-
-@Service
-public class UserService {
-
-    private final UserRepository userRepository;
-
-    @Autowired
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
-
-    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList) {
-        return userRepository.findAll((Root<User> root, CriteriaQuery<?> query, CriteriaBuilder criteriaBuilder) -> {
-            List<Predicate> predicates = new ArrayList<>();
-
-            for (SearchCriteria criteria : searchCriteriaList) {
-                String key = criteria.getKey();
-                QueryOperation operation = criteria.getOperation();
-                Object value = criteria.getValue();
-
-                Path<Object> path = root.get(key);
-
-                // Apply the appropriate operation based on the search criteria
-                if (operation == QueryOperation.EQUALS) {
-                    predicates.add(criteriaBuilder.equal(path, value));
-                } else if (operation == QueryOperation.NOT_EQUALS) {
-                    predicates.add(criteriaBuilder.notEqual(path, value));
-                } else if (operation == QueryOperation.IN) {
-                    predicates.add(path.in((Collection<?>) value));
-                } else if (operation == QueryOperation.NOT_IN) {
-                    predicates.add(criteriaBuilder.not(path.in((Collection<?>) value)));
-                } else if (operation == QueryOperation.CONTAINS) {
-                    predicates.add(criteriaBuilder.like(criteriaBuilder.lower(path.as(String.class)), "%" + value.toString().toLowerCase(Locale.ROOT) + "%"));
-                } else if (operation == QueryOperation.NOT_CONTAINS) {
-                    predicates.add(criteriaBuilder.notLike(criteriaBuilder.lower(path.as(String.class)), "%" + value.toString().toLowerCase(Locale.ROOT) + "%"));
-                }
-                // Add more operations as needed
-            }
-
-            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
-        });
-    }
-}
-
-
-###### ENEUM FOR ALL OPERATIONS  ####################
-
-
-public enum QueryOperation {
-    EQUALS("eq"),
-    NOT_EQUALS("neq"),
-    IN("in"),
-    NOT_IN("not in"),
-    CONTAINS("contains"),
-    NOT_CONTAINS("not contains");
-
-    private final String operator;
-
-    QueryOperation(String operator) {
-        this.operator = operator;
-    }
-
-    public String getOperator() {
-        return operator;
-    }
-}
-
-
-
-
-
-
