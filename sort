@@ -1,0 +1,60 @@
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    private final UserService userService;
+
+    public UserController(UserService userService) {
+        this.userService = userService;
+    }
+
+    @PostMapping("/search")
+    public ResponseEntity<List<User>> searchUsers(@RequestBody SearchRequest searchRequest) {
+        List<SearchCriteria> searchCriteriaList = searchRequest.getSearchCriteriaList();
+        String sortColumn = searchRequest.getSortColumn();
+        String sortDirection = searchRequest.getSortDirection();
+
+        List<User> users = userService.searchUsers(searchCriteriaList, sortColumn, sortDirection);
+
+        return ResponseEntity.ok(users);
+    }
+}
+
+
+
+public class SearchRequest {
+    private List<SearchCriteria> searchCriteriaList;
+    private String sortColumn;
+    private String sortDirection;
+
+    // Constructors, getters, and setters
+}
+
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList, String sortColumn, String sortDirection) {
+        Sort sort = Sort.by(Sort.Direction.ASC, "id"); // Default sorting by id in ascending order
+        if (sortColumn != null && sortDirection != null) {
+            Sort.Direction direction = Sort.Direction.fromString(sortDirection.toUpperCase());
+            sort = Sort.by(direction, sortColumn);
+        }
+
+        return userRepository.findAll((root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            for (SearchCriteria criteria : searchCriteriaList) {
+                // ... (same as the previous code)
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        }, sort);
+    }
+
+    // ... (the rest of the code remains the same)
+}
