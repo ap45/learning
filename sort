@@ -58,3 +58,45 @@ public class UserService {
 
     // ... (the rest of the code remains the same)
 }
+
+
+### ANOTHER LOGIC ####
+
+@Service
+public class UserService {
+    private final UserRepository userRepository;
+
+    public UserService(UserRepository userRepository) {
+        this.userRepository = userRepository;
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList, String sortColumn, String sortDirection) {
+        Sort sort = createSort(sortColumn, sortDirection);
+        return userRepository.findAll((root, query, criteriaBuilder) -> {
+            List<Predicate> predicates = new ArrayList<>();
+
+            for (SearchCriteria criteria : searchCriteriaList) {
+                // ... same as previous code for search criteria ...
+
+            }
+
+            return criteriaBuilder.and(predicates.toArray(new Predicate[0]));
+        }, sort);
+    }
+
+    private Sort createSort(String sortColumn, String sortDirection) {
+        // Default sort by created date if sortColumn is null or empty
+        if (StringUtils.isEmpty(sortColumn)) {
+            sortColumn = "createdDate";
+        }
+
+        if ("desc".equalsIgnoreCase(sortDirection)) {
+            return Sort.by(Sort.Direction.DESC, sortColumn);
+        } else {
+            return Sort.by(Sort.Direction.ASC, sortColumn);
+        }
+    }
+
+    // ... other methods for handling predicates and sorting ...
+}
+
