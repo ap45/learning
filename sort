@@ -122,3 +122,32 @@ public class UserService {
     // ... other methods for handling predicates and sorting ...
 }
 
+
+
+####################### SNAKE CASE#####################
+
+@Service
+public class UserService {
+    // ...
+
+    private String toSnakeCase(String camelCase) {
+        return camelCase.replaceAll("(.)(\\p{Upper})", "$1_$2").toLowerCase();
+    }
+
+    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList, String sortColumn, String sortDirection) {
+        String sortField = "createdDate"; // Default sorting column
+        Sort.Direction direction = Sort.Direction.ASC;
+
+        if (sortColumn != null && sortDirection != null) {
+            // Convert the camelCase sort column to snake_case
+            sortField = toSnakeCase(sortColumn);
+            direction = Sort.Direction.fromString(sortDirection);
+        }
+
+        Sort sort = Sort.by(direction, sortField);
+        // ...
+    }
+
+    // ...
+}
+
