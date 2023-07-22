@@ -128,26 +128,44 @@ public class UserService {
 
 @Service
 public class UserService {
-    // ...
+    // ... (existing code remains the same)
 
-    private String toSnakeCase(String camelCase) {
-        return camelCase.replaceAll("(.)(\\p{Upper})", "$1_$2").toLowerCase();
+    public List<User> searchUsersWithSorting(List<SearchCriteria> searchCriteriaList, String sortColumn, String sortDirection) {
+        Sort sort = createSortFromColumnAndDirection(sortColumn, sortDirection);
+        return userRepository.findAll((root, query, criteriaBuilder) -> {
+            Predicate predicate = buildPredicate(searchCriteriaList, criteriaBuilder, root);
+            query.where(predicate);
+            return query.getRestriction();
+        }, sort);
     }
 
-    public List<User> searchUsers(List<SearchCriteria> searchCriteriaList, String sortColumn, String sortDirection) {
-        String sortField = "createdDate"; // Default sorting column
-        Sort.Direction direction = Sort.Direction.ASC;
+    private Predicate buildPredicate(List<SearchCriteria> searchCriteriaList, CriteriaBuilder criteriaBuilder, Root<User> root) {
+        // ... (existing buildPredicate logic remains the same)
+    }
 
-        if (sortColumn != null && sortDirection != null) {
-            // Convert the camelCase sort column to snake_case
-            sortField = toSnakeCase(sortColumn);
-            direction = Sort.Direction.fromString(sortDirection);
+    private Sort createSortFromColumnAndDirection(String sortColumn, String sortDirection) {
+        String camelCaseColumn = convertToCamelCase(sortColumn);
+        Sort.Direction direction = Sort.Direction.fromStringOrNull(sortDirection);
+
+        if (direction == null) {
+            direction = Sort.Direction.ASC;
         }
 
-        Sort sort = Sort.by(direction, sortField);
-        // ...
+        return new Sort(new Order(direction, camelCaseColumn, Sort.NullHandling.NATIVE));
     }
 
-    // ...
+    private String convertToCamelCase(String snakeCaseColumn) {
+        String[] parts = snakeCaseColumn.split("_");
+        StringBuilder camelCaseBuilder = new StringBuilder(parts[0]);
+        
+        for (int i = 1; i < parts.length; i++) {
+            String part = parts[i];
+            camelCaseBuilder.append(part.substring(0, 1).toUpperCase());
+            camelCaseBuilder.append(part.substring(1));
+        }
+
+        return camelCaseBuilder.toString();
+    }
 }
+
 
