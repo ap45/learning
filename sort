@@ -145,9 +145,11 @@ public class UserService {
 
     private Sort createSortFromColumnAndDirection(String sortColumn, String sortDirection) {
         String camelCaseColumn = convertToCamelCase(sortColumn);
-        Sort.Direction direction = Sort.Direction.fromStringOrNull(sortDirection);
+        Sort.Direction direction;
 
-        if (direction == null) {
+        try {
+            direction = Sort.Direction.valueOf(sortDirection.toUpperCase());
+        } catch (IllegalArgumentException e) {
             direction = Sort.Direction.ASC;
         }
 
@@ -163,3 +165,24 @@ public class UserService {
         // ... (existing convertToCamelCase logic remains the same)
     }
 }
+
+
+    private String convertToCamelCase(String snakeCaseColumn) {
+        // ... (existing convertToCamelCase logic remains the same)
+    }
+}
+
+
+
+private String convertToCamelCase(String snakeCaseColumn) {
+        String[] parts = snakeCaseColumn.split("_");
+        StringBuilder camelCaseBuilder = new StringBuilder(parts[0]);
+        
+        for (int i = 1; i < parts.length; i++) {
+            String part = parts[i];
+            camelCaseBuilder.append(part.substring(0, 1).toUpperCase());
+            camelCaseBuilder.append(part.substring(1));
+        }
+
+        return camelCaseBuilder.toString();
+    }
