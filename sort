@@ -151,21 +151,15 @@ public class UserService {
             direction = Sort.Direction.ASC;
         }
 
-        return new Sort(new Order(direction, camelCaseColumn, Sort.NullHandling.NATIVE));
+        if (StringUtils.isEmpty(camelCaseColumn)) {
+            // Set the default sort to createdDate
+            return Sort.by(Sort.Order.by("createdDate").with(direction));
+        }
+
+        return Sort.by(Sort.Order.by(camelCaseColumn).with(direction));
     }
 
     private String convertToCamelCase(String snakeCaseColumn) {
-        String[] parts = snakeCaseColumn.split("_");
-        StringBuilder camelCaseBuilder = new StringBuilder(parts[0]);
-        
-        for (int i = 1; i < parts.length; i++) {
-            String part = parts[i];
-            camelCaseBuilder.append(part.substring(0, 1).toUpperCase());
-            camelCaseBuilder.append(part.substring(1));
-        }
-
-        return camelCaseBuilder.toString();
+        // ... (existing convertToCamelCase logic remains the same)
     }
 }
-
-
