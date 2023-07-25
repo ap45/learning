@@ -1,0 +1,298 @@
+########################## SERVICE ####################################
+
+@RunWith(MockitoJUnitRunner.class)
+public class ProfileServiceTest {
+    @Mock
+    private ProfileRepository profileRepository;
+
+    @Mock
+    private SourceListRepository sourceListRepository;
+
+    @InjectMocks
+    private ProfileService profileService;
+
+    @Test
+    public void testCreateProfile() {
+        Profile profile = new Profile();
+        profile.setName("John Doe");
+        profile.setDob(LocalDate.of(1990, 5, 20));
+        profile.setStatus("Active");
+
+        Profile savedProfile = new Profile();
+        savedProfile.setId(1L);
+        savedProfile.setName("John Doe");
+        savedProfile.setDob(LocalDate.of(1990, 5, 20));
+        savedProfile.setStatus("Active");
+
+        Mockito.when(profileRepository.save(Mockito.any(Profile.class))).thenReturn(savedProfile);
+
+        Profile resultProfile = profileService.createProfile(profile);
+
+        assertNotNull(resultProfile.getId());
+        assertEquals("John Doe", resultProfile.getName());
+        assertEquals(LocalDate.of(1990, 5, 20), resultProfile.getDob());
+        assertEquals("Active", resultProfile.getStatus());
+    }
+
+    @Test
+    public void testSearchProfiles() {
+        // Mock profiles and source list
+        Profile profile1 = new Profile();
+        profile1.setId(1L);
+        profile1.setName("John Doe");
+        profile1.setDob(LocalDate.of(1990, 5, 20));
+        profile1.setStatus("Active");
+
+        Profile profile2 = new Profile();
+        profile2.setId(2L);
+        profile2.setName("Jane Smith");
+        profile2.setDob(LocalDate.of(1985, 8, 12));
+        profile2.setStatus("Inactive");
+
+        SourceList source1 = new SourceList();
+        source1.setId(1L);
+        source1.setValue("Source 1");
+        source1.setProfile(profile1);
+
+        SourceList source2 = new SourceList();
+        source2.setId(2L);
+        source2.setValue("Source 2");
+        source2.setProfile(profile1);
+
+        profile1.setSourceList(Arrays.asList(source1, source2));
+
+        List<Profile> profiles = Arrays.asList(profile1, profile2);
+
+        // Mock the repository methods
+        Mockito.when(profileRepository.findAllByCriteria(Mockito.anyList(), Mockito.any(Sort.class)))
+                .thenReturn(profiles);
+
+        // Test 1: Search by name containing "John"
+        List<SearchCriteria> criteriaList1 = Collections.singletonList(new SearchCriteria("name", QueryOperation.CONTAINS, Collections.singletonList("John")));
+        List<Profile> searchResult1 = profileService.searchProfiles(criteriaList1, null);
+        assertEquals(1, searchResult1.size());
+        assertEquals("John Doe", searchResult1.get(0).getName());
+
+        // Test 2: Search by status "Active"
+        List<SearchCriteria> criteriaList2 = Collections.singletonList(new SearchCriteria("status", QueryOperation.EQUALS, Collections.singletonList("Active")));
+        List<Profile> searchResult2 = profileService.searchProfiles(criteriaList2, null);
+        assertEquals(1, searchResult2.size());
+        assertEquals("Active", searchResult2.get(0).getStatus());
+
+        // Test 3: Search by source list "Source 1"
+        List<SearchCriteria> criteriaList3 = Collections.singletonList(new SearchCriteria("sourceList", QueryOperation.IN, Collections.singletonList("Source 1")));
+        List<Profile> searchResult3 = profileService.searchProfiles(criteriaList3, null);
+        assertEquals(1, searchResult3.size());
+        assertEquals("John Doe", searchResult3.get(0).getName());
+
+        // Test 4: Search by source list "Source 3" (no result)
+        List<SearchCriteria> criteriaList4 = Collections.singletonList(new SearchCriteria("sourceList", QueryOperation.IN, Collections.singletonList("Source 3")));
+        List<Profile> searchResult4 = profileService.searchProfiles(criteriaList4, null);
+        assertEquals(0, searchResult4.size());
+    }
+}
+
+
+
+############################## CONTROLLER #######################################################
+
+
+@RunWith(MockitoJUnitRunner.class)
+public class ProfileControllerTest {
+    @Mock
+    private ProfileService profileService;
+
+    @InjectMocks
+    private ProfileController profileController;
+
+    private MockMvc mockMvc;
+
+    @Before
+    public void setup() {
+        mockMvc = MockMvcBuilders.standaloneSetup(profileController).build();
+    }
+
+    @Test
+    public void testCreateProfile() throws Exception {
+        String profileJson = "{ \"name\": \"John Doe\", \"dob\": \"1990-05-20\", \"status\": \"Active\", \"sourceList\": [\"Source 1\", \"Source 2\"] }";
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/profiles")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(profileJson))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.id").exists())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("John Doe"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status").value("Active"));
+    }
+
+    @Test
+    public void testSearchProfiles() throws Exception {
+        String searchCriteriaJson = "[ { \"queryKey\": \"name\", \"queryOperation\": \"CONTAINS\", \"queryValue\": [\"John\"] }, { \"queryKey\": \"status\", \"queryOperation\": \"EQUALS\", \"queryValue\": [\"Active\"] }, { \"queryKey\": \"sourceList\", \"queryOperation\": \"IN\", \"queryValue\": [\"Source 1\"] } ]";
+
+        Profile profile1 = new Profile();
+        profile1.setName("John Doe");
+        profile1.setDob(LocalDate.of(1990, 5, 20));
+        profile1.setStatus("Active");
+
+        List<Profile> mockSearchResult = Collections.singletonList(profile1);
+
+        Mockito.when(profileService.searchProfiles(Mockito.anyList(), Mockito.any(Sort.class))).thenReturn(mockSearchResult);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/profiles/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(searchCriteriaJson))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].name").value("John Doe"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].status").value("Active"));
+    }
+
+    @Test
+    public void testSearchProfiles_NoResults() throws Exception {
+        String searchCriteriaJson = "[ { \"queryKey\": \"name\", \"queryOperation\": \"CONTAINS\", \"queryValue\": [\"NonExistent\"] } ]";
+
+        List<Profile> mockSearchResult = Collections.emptyList();
+
+        Mockito.when(profileService.searchProfiles(Mockito.anyList(), Mockito.any(Sort.class))).thenReturn(mockSearchResult);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/profiles/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(searchCriteriaJson))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$").isEmpty());
+    }
+
+    @Test
+    public void testSearchProfiles_InvalidSearchCriteria() throws Exception {
+        String searchCriteriaJson = "[ { \"queryKey\": \"invalidField\", \"queryOperation\": \"CONTAINS\", \"queryValue\": [\"John\"] } ]";
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/profiles/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(searchCriteriaJson))
+                .andExpect(MockMvcResultMatchers.status().isBadRequest());
+    }
+}
+
+
+
+
+
+############################ APPROACH 2 ##################################################################################################4
+
+########################################### SERVICE @################################
+
+@RunWith(MockitoJUnitRunner.class)
+public class ProfileServiceTest {
+
+    @InjectMocks
+    private ProfileService profileService;
+
+    @Mock
+    private ProfileRepository profileRepository;
+
+    @Test
+    public void testCreateProfile() {
+        Profile mockProfile = new Profile("John Doe", "1990-01-01", "Active", Arrays.asList("Source 1", "Source 2"), Arrays.asList("USA", "Canada"));
+        Mockito.when(profileRepository.save(Mockito.any(Profile.class))).thenReturn(mockProfile);
+
+        Profile createdProfile = profileService.createProfile(mockProfile);
+
+        Assert.assertEquals("John Doe", createdProfile.getName());
+        Assert.assertEquals("1990-01-01", createdProfile.getDob());
+        Assert.assertEquals("Active", createdProfile.getStatus());
+        Assert.assertEquals(2, createdProfile.getSourceList().size());
+        Assert.assertEquals(2, createdProfile.getCountries().size());
+    }
+
+    @Test
+    public void testSearchProfiles() {
+        // Mock the search query
+        List<Query> mockQueries = Arrays.asList(
+                new Query("name", QueryOperation.CONTAINS, "John"),
+                new Query("status", QueryOperation.EQUALS, "Active")
+        );
+
+        // Mock the search result
+        List<Profile> mockSearchResult = Arrays.asList(
+                new Profile("John Doe", "1990-01-01", "Active", Arrays.asList("Source 1", "Source 2"), Arrays.asList("USA", "Canada")),
+                new Profile("Jane Smith", "1985-03-15", "Active", Arrays.asList("Source 3", "Source 4"), Arrays.asList("UK", "Australia"))
+        );
+
+        Mockito.when(profileRepository.findAll(Mockito.any(Specification.class))).thenReturn(mockSearchResult);
+
+        List<Profile> searchResult = profileService.searchProfiles(mockQueries);
+
+        Assert.assertEquals(2, searchResult.size());
+        Assert.assertEquals("John Doe", searchResult.get(0).getName());
+        Assert.assertEquals("Jane Smith", searchResult.get(1).getName());
+    }
+}
+
+
+
+############################## CONTROLLER ########################################################
+@RunWith(SpringRunner.class)
+@WebMvcTest(ProfileController.class)
+public class ProfileControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @MockBean
+    private ProfileService profileService;
+
+    @Test
+    public void testCreateProfile() throws Exception {
+        String mockProfileJson = "{\"name\":\"John Doe\",\"dob\":\"1990-01-01\",\"status\":\"Active\",\"sourceList\":[\"Source 1\",\"Source 2\"],\"countries\":[\"USA\",\"Canada\"]}";
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/profiles")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mockProfileJson))
+                .andExpect(MockMvcResultMatchers.status().isOk());
+    }
+
+    @Test
+    public void testSearchProfiles() throws Exception {
+        String mockQueryJson = "[{\"queryKey\":\"name\",\"queryOperation\":\"CONTAINS\",\"queryValue\":\"John\"},{\"queryKey\":\"status\",\"queryOperation\":\"EQUALS\",\"queryValue\":\"Active\"}]";
+
+        // Mock the search result
+        List<Profile> mockSearchResult = Arrays.asList(
+                new Profile("John Doe", "1990-01-01", "Active", Arrays.asList("Source 1", "Source 2"), Arrays.asList("USA", "Canada")),
+                new Profile("Jane Smith", "1985-03-15", "Active", Arrays.asList("Source 3", "Source 4"), Arrays.asList("UK", "Australia"))
+        );
+
+        Mockito.when(profileService.searchProfiles(Mockito.anyList())).thenReturn(mockSearchResult);
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/profiles/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mockQueryJson))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].name").value("John Doe"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[1].name").value("Jane Smith"));
+    }
+
+    @Test
+    public void testSortSearchedProfiles() throws Exception {
+        String mockQueryJson = "[{\"queryKey\":\"status\",\"queryOperation\":\"EQUALS\",\"queryValue\":\"Active\"}]";
+
+        // Mock the search result
+        List<Profile> mockSearchResult = Arrays.asList(
+                new Profile("Jane Smith", "1985-03-15", "Active", Arrays.asList("Source 3", "Source 4"), Arrays.asList("UK", "Australia")),
+                new Profile("John Doe", "1990-01-01", "Active", Arrays.asList("Source 1", "Source 2"), Arrays.asList("USA", "Canada"))
+        );
+
+        Mockito.when(profileService.searchProfiles(Mockito.anyList())).thenReturn(mockSearchResult);
+
+        String sortColumn = "name";
+        String sortDirection = "asc";
+
+        mockMvc.perform(MockMvcRequestBuilders.post("/api/profiles/search/sort")
+                .param("sortColumn", sortColumn)
+                .param("sortDirection", sortDirection)
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(mockQueryJson))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$[0].name").value("Jane Smith"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$[1].name").value("John Doe"));
+    }
+}
