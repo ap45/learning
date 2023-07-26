@@ -1,0 +1,265 @@
+Entities:
+Profile.java:
+
+java
+Copy code
+import javax.persistence.*;
+import java.util.Date;
+import java.util.Set;
+
+@Entity
+public class Profile {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+    private Date dob;
+    private String status;
+
+    @ElementCollection(fetch = FetchType.EAGER)
+    @CollectionTable(name = "sourcelist", joinColumns = @JoinColumn(name = "profile_id"))
+    @Column(name = "source")
+    private Set<String> sourceList;
+
+    private String countries;
+    private String Class;
+    private Date creationDate;
+    private Date lastUpdatedDate;
+
+    // Getters and setters, constructors, and other methods (if any)
+}
+
+###### ENUM #######
+public enum QueryOperation {
+    EQUALS, NOT_EQUALS, IN, NOT_IN, CONTAINS, NOT_CONTAINS
+}
+
+
+####### SEARCH CRITERIA #########
+
+public class SearchCriteria {
+    private String key;
+    private QueryOperation operation;
+    private Object value; // Can be a string or list
+
+    // Getters and setters, constructors, and other methods (if any)
+}
+
+
+###### SEARCH REQ ####
+
+import org.springframework.data.domain.Sort;
+
+import java.util.List;
+
+public class SearchRequest {
+    private List<SearchCriteria> searchCriteria;
+    private int page;
+    private int pageSize;
+    private String sortColumn;
+    private Sort.Direction sortDirection;
+
+    // Getters and setters, constructors, and other methods (if any)
+}
+
+##################
+
+import org.springframework.data.domain.Page;
+
+public class SearchResponse<T> {
+    private Page<T> data;
+    private long totalElements;
+    private int totalPages;
+
+    // Getters and setters, constructors, and other methods (if any)
+}
+
+
+################################################
+
+import java.util.List;
+
+public interface ProfileService {
+    Profile createProfile(Profile profile);
+
+    SearchResponse<Profile> searchProfiles(SearchRequest searchRequest);
+}
+
+
+
+#############################################################################
+
+import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.stereotype.Repository;
+
+@Repository
+public interface ProfileRepository extends JpaRepository<Profile, Long> {
+}
+
+
+###############################################################################3
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+import javax.persistence.EntityManager;
+import javax.persistence.criteria.CriteriaBuilder;
+import javax.persistence.criteria.CriteriaQuery;
+import javax.persistence.criteria.Join;
+import javax.persistence.criteria.Predicate;
+import javax.persistence.criteria.Root;
+import java.util.ArrayList;
+import java.util.List;
+
+@Service
+@Transactional
+public class ProfileServiceImpl implements ProfileService {
+
+    private final ProfileRepository profileRepository;
+    private final EntityManager entityManager;
+
+    @Autowired
+    public ProfileServiceImpl(ProfileRepository profileRepository, EntityManager entityManager) {
+        this.profileRepository = profileRepository;
+        this.entityManager = entityManager;
+    }
+
+    @Override
+    public Profile createProfile(Profile profile) {
+        return profileRepository.save(profile);
+    }
+
+    @Override
+    public SearchResponse<Profile> searchProfiles(SearchRequest searchRequest) {
+        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
+        CriteriaQuery<Profile> query = cb.createQuery(Profile.class);
+        Root<Profile> root = query.from(Profile.class);
+        query.select(root).where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
+
+        // Sort the results if sortColumn and sortDirection are provided
+        if (searchRequest.getSortColumn() != null && searchRequest.getSortDirection() != null) {
+            Sort sort = Sort.by(searchRequest.getSortDirection(), searchRequest.getSortColumn());
+            query.orderBy(getSortOrder(sort, cb, root));
+        }
+
+        Pageable pageable = PageRequest.of(searchRequest.getPage(), searchRequest.getPageSize());
+        Page<Profile> resultPage = profileRepository.findAll(query, pageable);
+
+        SearchResponse<Profile> searchResponse = new SearchResponse<>();
+        searchResponse.setData(resultPage);
+        searchResponse.setTotalElements(resultPage.getTotalElements());
+        searchResponse.setTotalPages(resultPage.getTotalPages());
+
+        return searchResponse;
+    }
+
+    private Predicate[] buildPredicates(List<SearchCriteria> searchCriteria, CriteriaBuilder cb, Root<Profile> root) {
+        List<Predicate> predicates = new ArrayList<>();
+        for (SearchCriteria criteria : searchCriteria) {
+            String key = criteria.getKey();
+            QueryOperation operation = criteria.getOperation();
+            Object value = criteria.getValue();
+
+            if (operation == null || key == null || value == null) {
+                continue;
+            }
+
+            if (key.equals("sourcelist")) {
+                Join<Profile, String> sourceListJoin = root.joinSet("sourceList");
+                switch (operation) {
+                    case EQUALS:
+                        predicates.add(sourceListJoin.in(convertToProperTypeList(value)));
+                        break;
+                    case NOT_EQUALS:
+                        predicates.add(cb.not(sourceListJoin.in(convertToProperTypeList(value))));
+                        break;
+                    case IN:
+                        predicates.add(sourceListJoin.in(convertToProperTypeList(value)));
+                        break;
+                    case NOT_IN:
+                        predicates.add(cb.not(sourceListJoin.in(convertToProperTypeList(value))));
+                        break;
+                    case CONTAINS:
+                        for (Object item : convertToProperTypeList(value)) {
+                            predicates.add(cb.like(sourceListJoin, "%" + item + "%"));
+                        }
+                        break;
+                    case NOT_CONTAINS:
+                        for (Object item : convertToProperTypeList(value)) {
+                            predicates.add(cb.notLike(sourceListJoin, "%" + item + "%"));
+                        }
+                        break;
+                    default:
+                        break;
+                }
+            } else {
+                // ... (the same predicate building logic for other fields)
+            }
+        }
+        return predicates.toArray(new Predicate[0]);
+    }
+
+    // Helper method to convert the list values to the appropriate data type
+    private List<String> convertToProperTypeList(Object value) {
+        List<String> list = new ArrayList<>();
+        if (value instanceof List) {
+            List<Object> valueList = (List<Object>) value;
+            for (Object item : valueList) {
+                if (item instanceof String) {
+                    list.add((String) item);
+                }
+            }
+        } else if (value instanceof String) {
+            list.add((String) value);
+        }
+        return list;
+    }
+
+    // Helper method to get sort order based on the sort column and direction
+    private List<javax.persistence.criteria.Order> getSortOrder(Sort sort, CriteriaBuilder cb, Root<Profile> root) {
+        List<javax.persistence.criteria.Order> orders = new ArrayList<>();
+        for (Sort.Order sortOrder : sort) {
+            if (sortOrder.isAscending()) {
+                orders.add(cb.asc(root.get(sortOrder.getProperty())));
+            } else {
+                orders.add(cb.desc(root.get(sortOrder.getProperty())));
+            }
+        }
+        return orders;
+    }
+}
+
+
+####################################################################################################
+
+
+
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.data.domain.Page;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/profiles")
+public class ProfileController {
+
+    private final ProfileService profileService;
+
+    @Autowired
+    public ProfileController(ProfileService profileService) {
+        this.profileService = profileService;
+    }
+
+    @PostMapping("/search")
+    public ResponseEntity<SearchResponse<Profile>> searchProfiles(@RequestBody SearchRequest searchRequest) {
+        SearchResponse<Profile> searchResponse = profileService.searchProfiles(searchRequest);
+        return ResponseEntity.ok(searchResponse);
+    }
+}
+
