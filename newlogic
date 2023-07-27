@@ -156,10 +156,14 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     public SearchResponse<Profile> searchProfiles(SearchRequest searchRequest) {
+        
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Profile> query = cb.createQuery(Profile.class);
         Root<Profile> root = query.from(Profile.class);
-        query.select(root).where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
+
+        Specification<Profile> spec = Specifications.where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
+
+        query.where(spec);
 
         // Sort the results if sortColumn and sortDirection are provided
         if (searchRequest.getSortColumn() != null && searchRequest.getSortDirection() != null) {
