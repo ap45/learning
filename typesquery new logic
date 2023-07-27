@@ -289,3 +289,70 @@ public class ProfileServiceImpl implements ProfileService {
     }
 }
 
+
+
+##############################################################################################
+
+
+import javax.persistence.AttributeConverter;
+import javax.persistence.Converter;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+
+@Converter
+public class LocalDateToStringConverter implements AttributeConverter<LocalDate, String> {
+
+    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd--MM--yyyy");
+
+    @Override
+    public String convertToDatabaseColumn(LocalDate attribute) {
+        return attribute != null ? attribute.format(DATE_FORMATTER) : null;
+    }
+
+    @Override
+    public LocalDate convertToEntityAttribute(String dbData) {
+        return dbData != null ? LocalDate.parse(dbData, DATE_FORMATTER) : null;
+    }
+}
+
+
+import javax.persistence.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Set;
+
+@Entity
+@Table(name = "profile")
+public class Profile {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+
+    @Column(name = "dob")
+    @Convert(converter = LocalDateToStringConverter.class)
+    private LocalDate dateOfBirth;
+
+    private String status;
+
+    @ElementCollection
+    @CollectionTable(name = "profile_source_list", joinColumns = @JoinColumn(name = "profile_id"))
+    @Column(name = "source_list")
+    private Set<String> sourceListAttribute;
+
+    private String countries;
+
+    @Column(name = "class")
+    private String profileClass;
+
+    @Column(name = "creation_date")
+    @Convert(converter = LocalDateToStringConverter.class)
+    private LocalDate creationDate;
+
+    @Column(name = "last_updated_date")
+    @Convert(converter = LocalDateToStringConverter.class)
+    private LocalDate lastUpdatedDate;
+
+    // Getters (no setters for read-only properties) and other methods...
+}
