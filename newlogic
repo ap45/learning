@@ -130,7 +130,10 @@ import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Join;
 import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Date;
 import java.util.List;
 
 @Service
@@ -215,8 +218,7 @@ public class ProfileServiceImpl implements ProfileService {
                         break;
                 }
             } else {
-                // ... (the same predicate building logic for other fields)
-switch (operation) {
+                switch (operation) {
                     case EQUALS:
                         predicates.add(cb.equal(root.get(key), convertToProperType(value)));
                         break;
@@ -230,18 +232,32 @@ switch (operation) {
                         predicates.add(cb.not(root.get(key).in(convertToProperTypeList(value))));
                         break;
                     case CONTAINS:
-                        predicates.add(cb.like(root.get(key), "%" + value + "%"));
+                        predicates.add(cb.like(cb.lower(root.get(key)), "%" + value.toString().toLowerCase() + "%"));
                         break;
                     case NOT_CONTAINS:
-                        predicates.add(cb.notLike(root.get(key), "%" + value + "%"));
+                        predicates.add(cb.notLike(cb.lower(root.get(key)), "%" + value.toString().toLowerCase() + "%"));
                         break;
                     default:
                         break;
                 }
             }
-            }
         }
         return predicates.toArray(new Predicate[0]);
+    }
+
+    // Helper method to convert the value to the appropriate data type
+    private Object convertToProperType(Object value) {
+        if (value instanceof Date) {
+            return value;
+        } else if (value instanceof String) {
+            SimpleDateFormat formatter = new SimpleDateFormat("dd-MM-yyyy");
+            try {
+                return formatter.parse((String) value);
+            } catch (ParseException e) {
+                e.printStackTrace();
+            }
+        }
+        return value;
     }
 
     // Helper method to convert the list values to the appropriate data type
@@ -273,7 +289,6 @@ switch (operation) {
         return orders;
     }
 }
-
 
 ####################################################################################################
 
