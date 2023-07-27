@@ -115,7 +115,6 @@ public interface ProfileRepository extends JpaRepository<Profile, Long> {
 
 
 ###############################################################################3
-
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
@@ -156,14 +155,10 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     public SearchResponse<Profile> searchProfiles(SearchRequest searchRequest) {
-        
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Profile> query = cb.createQuery(Profile.class);
         Root<Profile> root = query.from(Profile.class);
-
-        Specification<Profile> spec = Specifications.where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
-
-        query.where(spec);
+        query.select(root).where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
 
         // Sort the results if sortColumn and sortDirection are provided
         if (searchRequest.getSortColumn() != null && searchRequest.getSortDirection() != null) {
@@ -193,8 +188,8 @@ public class ProfileServiceImpl implements ProfileService {
                 continue;
             }
 
-            if (key.equals("sourcelist")) {
-                Join<Profile, String> sourceListJoin = root.joinSet("sourceList");
+            if (key.equals("source_list_column")) {
+                Join<Profile, String> sourceListJoin = root.joinSet("sourceListAttribute");
                 switch (operation) {
                     case EQUALS:
                         predicates.add(sourceListJoin.in(convertToProperTypeList(value)));
@@ -236,10 +231,10 @@ public class ProfileServiceImpl implements ProfileService {
                         predicates.add(cb.not(root.get(key).in(convertToProperTypeList(value))));
                         break;
                     case CONTAINS:
-                        predicates.add(cb.like(cb.lower(root.get(key)), "%" + value.toString().toLowerCase() + "%"));
+                        predicates.add(cb.like(root.get(key), "%" + value + "%"));
                         break;
                     case NOT_CONTAINS:
-                        predicates.add(cb.notLike(cb.lower(root.get(key)), "%" + value.toString().toLowerCase() + "%"));
+                        predicates.add(cb.notLike(root.get(key), "%" + value + "%"));
                         break;
                     default:
                         break;
@@ -249,22 +244,18 @@ public class ProfileServiceImpl implements ProfileService {
         return predicates.toArray(new Predicate[0]);
     }
 
-    // Helper method to convert the value to the appropriate data type
     private Object convertToProperType(Object value) {
-        if (value instanceof Date) {
-            return value;
-        } else if (value instanceof String) {
-            SimpleDateFormat formatter = new SimpleDateFormat("dd-MM-yyyy");
+        if (value instanceof String) {
             try {
-                return formatter.parse((String) value);
+                return new SimpleDateFormat("dd-MM-yyyy").parse((String) value);
             } catch (ParseException e) {
-                e.printStackTrace();
+                // If parsing fails, return the original string as-is
+                return value;
             }
         }
         return value;
     }
 
-    // Helper method to convert the list values to the appropriate data type
     private List<String> convertToProperTypeList(Object value) {
         List<String> list = new ArrayList<>();
         if (value instanceof List) {
@@ -280,7 +271,6 @@ public class ProfileServiceImpl implements ProfileService {
         return list;
     }
 
-    // Helper method to get sort order based on the sort column and direction
     private List<javax.persistence.criteria.Order> getSortOrder(Sort sort, CriteriaBuilder cb, Root<Profile> root) {
         List<javax.persistence.criteria.Order> orders = new ArrayList<>();
         for (Sort.Order sortOrder : sort) {
@@ -293,6 +283,7 @@ public class ProfileServiceImpl implements ProfileService {
         return orders;
     }
 }
+
 
 ####################################################################################################
 
