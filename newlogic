@@ -200,6 +200,29 @@ public class ProfileServiceImpl implements ProfileService {
                 }
             } else {
                 // ... (the same predicate building logic for other fields)
+switch (operation) {
+                    case EQUALS:
+                        predicates.add(cb.equal(root.get(key), convertToProperType(value)));
+                        break;
+                    case NOT_EQUALS:
+                        predicates.add(cb.notEqual(root.get(key), convertToProperType(value)));
+                        break;
+                    case IN:
+                        predicates.add(root.get(key).in(convertToProperTypeList(value)));
+                        break;
+                    case NOT_IN:
+                        predicates.add(cb.not(root.get(key).in(convertToProperTypeList(value))));
+                        break;
+                    case CONTAINS:
+                        predicates.add(cb.like(root.get(key), "%" + value + "%"));
+                        break;
+                    case NOT_CONTAINS:
+                        predicates.add(cb.notLike(root.get(key), "%" + value + "%"));
+                        break;
+                    default:
+                        break;
+                }
+            }
             }
         }
         return predicates.toArray(new Predicate[0]);
