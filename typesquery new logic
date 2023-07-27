@@ -51,22 +51,33 @@ public class ProfileServiceImpl implements ProfileService {
             query.orderBy(getSortOrder(sort, cb, root));
         }
 
-        TypedQuery<Profile> typedQuery = entityManager.createQuery(query);
-        List<Profile> resultList = typedQuery.getResultList();
+       TypedQuery<Profile> typedQuery = entityManager.createQuery(query);
 
-        // Perform manual pagination
+        // Apply pagination
         int page = searchRequest.getPage();
         int pageSize = searchRequest.getPageSize();
-        int start = page * pageSize;
-        int end = Math.min((start + pageSize), resultList.size());
-        List<Profile> paginatedResult = resultList.subList(start, end);
+        typedQuery.setFirstResult(page * pageSize);
+        typedQuery.setMaxResults(pageSize);
+
+        List<Profile> resultList = typedQuery.getResultList();
+
+        // Count the total elements for pagination
+        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
+        countQuery.select(cb.count(countQuery.from(Profile.class))).where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
+        Long totalElements = entityManager.createQuery(countQuery).getSingleResult();
+
+        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
 
         SearchResponse<Profile> searchResponse = new SearchResponse<>();
-        searchResponse.setData(new PageImpl<>(paginatedResult, PageRequest.of(page, pageSize), resultList.size()));
-        searchResponse.setTotalElements((long) resultList.size());
-        searchResponse.setTotalPages((int) Math.ceil((double) resultList.size() / pageSize));
+        searchResponse.setData(new PageImpl<>(resultList, PageRequest.of(page, pageSize), totalElements));
+        searchResponse.setTotalElements(totalElements);
+        searchResponse.setTotalPages(totalPages);
 
         return searchResponse;
+    }
+
+
+
     }
 
     private Predicate[] buildPredicates(List<SearchCriteria> searchCriteria, CriteriaBuilder cb, Root<Profile> root) {
