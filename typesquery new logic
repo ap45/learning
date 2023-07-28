@@ -1,3 +1,82 @@
+################### entity ###########################
+
+import javax.persistence.*;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Set;
+
+@Entity
+@Table(name = "profile")
+public class Profile {
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    private Long id;
+
+    private String name;
+
+    @Column(name = "dob")
+    private String dateOfBirth;
+
+    private String status;
+
+    @ElementCollection
+    @CollectionTable(name = "profile_source_list", joinColumns = @JoinColumn(name = "profile_id"))
+    @Column(name = "source_list")
+    private Set<String> sourceListAttribute;
+
+    private String countries;
+
+    @Column(name = "class")
+    private String profileClass;
+
+    @Column(name = "creation_date")
+    private String creationDate;
+
+    @Column(name = "last_updated_date")
+    private String lastUpdatedDate;
+
+    // Getters and setters, constructors...
+
+    // Additional methods for date handling
+    public void setDateOfBirth(LocalDate dateOfBirth) {
+        this.dateOfBirth = formatDate(dateOfBirth);
+    }
+
+    public void setCreationDate(LocalDate creationDate) {
+        this.creationDate = formatDate(creationDate);
+    }
+
+    public void setLastUpdatedDate(LocalDate lastUpdatedDate) {
+        this.lastUpdatedDate = formatDate(lastUpdatedDate);
+    }
+
+    private String formatDate(LocalDate date) {
+        return date != null ? date.format(DateTimeFormatter.ofPattern("dd-MM-yyyy")) : null;
+    }
+
+    public LocalDate getLocalDateFromString(String date) {
+        if (date == null || date.isEmpty()) {
+            return null;
+        }
+        return LocalDate.parse(date, DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+    }
+}
+
+
+##################################################### 
+
+public enum QueryOperation {
+    EQUALS,
+    NOT_EQUALS,
+    IN,
+    NOT_IN,
+    CONTAINS,
+    NOT_CONTAINS,
+    BETWEEN
+}
+ ##############################################################33
+
+
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
@@ -14,10 +93,9 @@ import javax.persistence.criteria.CriteriaQuery;
 import javax.persistence.criteria.Join;
 import javax.persistence.criteria.Predicate;
 import javax.persistence.criteria.Root;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 @Service
@@ -35,6 +113,10 @@ public class ProfileServiceImpl implements ProfileService {
 
     @Override
     public Profile createProfile(Profile profile) {
+        // Convert LocalDate to formatted String before saving
+        profile.setDateOfBirth(profile.getLocalDateFromString(profile.getDateOfBirth()));
+        profile.setCreationDate(profile.getLocalDateFromString(profile.getCreationDate()));
+        profile.setLastUpdatedDate(profile.getLocalDateFromString(profile.getLastUpdatedDate()));
         return profileRepository.save(profile);
     }
 
@@ -43,55 +125,54 @@ public class ProfileServiceImpl implements ProfileService {
         CriteriaBuilder cb = entityManager.getCriteriaBuilder();
         CriteriaQuery<Profile> query = cb.createQuery(Profile.class);
         Root<Profile> root = query.from(Profile.class);
-        query.select(root).where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
+        query.select(root).where(buildPredicates(searchRequest.getCriteriaList(), cb, root));
 
-        // Sort the results if sortColumn and sortDirection are provided
-        if (searchRequest.getSortColumn() != null && searchRequest.getSortDirection() != null) {
-            Sort sort = Sort.by(searchRequest.getSortDirection(), searchRequest.getSortColumn());
-            query.orderBy(getSortOrder(sort, cb, root));
+        SortDirection sortDirection = searchRequest.getSortDirection();
+        String sortColumn = searchRequest.getSortColumn();
+        if (sortColumn != null && sortDirection != null) {
+            if (sortDirection == SortDirection.ASC) {
+                query.orderBy(cb.asc(root.get(sortColumn)));
+            } else {
+                query.orderBy(cb.desc(root.get(sortColumn)));
+            }
         }
 
-       TypedQuery<Profile> typedQuery = entityManager.createQuery(query);
+        TypedQuery<Profile> typedQuery = entityManager.createQuery(query);
 
-        // Apply pagination
-        int page = searchRequest.getPage();
+        // Calculate the total number of results without pagination
+        int totalResults = typedQuery.getResultList().size();
+
+        // Perform manual pagination
+        int page = searchRequest.getPageNumber();
         int pageSize = searchRequest.getPageSize();
-        typedQuery.setFirstResult(page * pageSize);
+        int startPosition = (page - 1) * pageSize;
+
+        
+        typedQuery.setFirstResult(startPosition);
         typedQuery.setMaxResults(pageSize);
 
         List<Profile> resultList = typedQuery.getResultList();
 
-        // Count the total elements for pagination
-        CriteriaQuery<Long> countQuery = cb.createQuery(Long.class);
-        countQuery.select(cb.count(countQuery.from(Profile.class))).where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
-        Long totalElements = entityManager.createQuery(countQuery).getSingleResult();
-
-        int totalPages = (int) Math.ceil((double) totalElements / pageSize);
-
         SearchResponse<Profile> searchResponse = new SearchResponse<>();
-        searchResponse.setData(new PageImpl<>(resultList, PageRequest.of(page, pageSize), totalElements));
-        searchResponse.setTotalElements(totalElements);
-        searchResponse.setTotalPages(totalPages);
+        searchResponse.setData(new PageImpl<>(resultList, PageRequest.of(page - 1, pageSize), totalResults));
+        searchResponse.setTotalElements((long) totalResults);
+        searchResponse.setTotalPages((int) Math.ceil((double) totalResults / pageSize));
 
         return searchResponse;
-    }
-
-
-
     }
 
     private Predicate[] buildPredicates(List<SearchCriteria> searchCriteria, CriteriaBuilder cb, Root<Profile> root) {
         List<Predicate> predicates = new ArrayList<>();
         for (SearchCriteria criteria : searchCriteria) {
-            String key = criteria.getKey();
-            QueryOperation operation = criteria.getOperation();
-            Object value = criteria.getValue();
+            String key = criteria.getQueryKey();
+            QueryOperation operation = criteria.getQueryOperation();
+            Object value = criteria.getQueryValue();
 
             if (operation == null || key == null || value == null) {
                 continue;
             }
 
-            if (key.equals("source_list_column")) {
+            if (key.equals("sourceList")) {
                 Join<Profile, String> sourceListJoin = root.joinSet("sourceListAttribute");
                 switch (operation) {
                     case EQUALS:
@@ -114,6 +195,16 @@ public class ProfileServiceImpl implements ProfileService {
                     case NOT_CONTAINS:
                         for (Object item : convertToProperTypeList(value)) {
                             predicates.add(cb.notLike(sourceListJoin, "%" + item + "%"));
+                        }
+                        break;
+                    case BETWEEN:
+                        if (value instanceof List) {
+                            List<Object> valueList = (List<Object>) value;
+                            if (valueList.size() >= 2) {
+                                Object startValue = convertToProperType(valueList.get(0));
+                                Object endValue = convertToProperType(valueList.get(1));
+                                predicates.add(cb.between(sourceListJoin, startValue, endValue));
+                            }
                         }
                         break;
                     default:
@@ -139,6 +230,16 @@ public class ProfileServiceImpl implements ProfileService {
                     case NOT_CONTAINS:
                         predicates.add(cb.notLike(root.get(key), "%" + value + "%"));
                         break;
+                    case BETWEEN:
+                        if (value instanceof List) {
+                            List<Object> valueList = (List<Object>) value;
+                            if (valueList.size() >= 2) {
+                                Object startValue = convertToProperType(valueList.get(0));
+                                Object endValue = convertToProperType(valueList.get(1));
+                                predicates.add(cb.between(root.get(key), startValue, endValue));
+                            }
+                        }
+                        break;
                     default:
                         break;
                 }
@@ -150,8 +251,8 @@ public class ProfileServiceImpl implements ProfileService {
     private Object convertToProperType(Object value) {
         if (value instanceof String) {
             try {
-                return new SimpleDateFormat("dd-MM-yyyy").parse((String) value);
-            } catch (ParseException e) {
+                return LocalDate.parse((String) value, DateTimeFormatter.ofPattern("dd-MM-yyyy"));
+            } catch (DateTimeParseException e) {
                 // If parsing fails, return the original string as-is
                 return value;
             }
@@ -189,170 +290,37 @@ public class ProfileServiceImpl implements ProfileService {
 
 
 
-
-
-
-
+##############################################################################################
 
 
 
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.data.domain.Page;
-import org.springframework.data.domain.PageImpl;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
-import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
 
-import javax.persistence.EntityManager;
-import javax.persistence.TypedQuery;
-import javax.persistence.criteria.CriteriaBuilder;
-import javax.persistence.criteria.CriteriaQuery;
-import javax.persistence.criteria.Join;
-import javax.persistence.criteria.Predicate;
-import javax.persistence.criteria.Root;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
+@RestController
+@RequestMapping("/profiles")
+public class ProfileController {
 
-@Service
-@Transactional
-public class ProfileServiceImpl implements ProfileService {
-
-    private final ProfileRepository profileRepository;
-    private final EntityManager entityManager;
+    private final ProfileService profileService;
 
     @Autowired
-    public ProfileServiceImpl(ProfileRepository profileRepository, EntityManager entityManager) {
-        this.profileRepository = profileRepository;
-        this.entityManager = entityManager;
+    public ProfileController(ProfileService profileService) {
+        this.profileService = profileService;
     }
 
-    @Override
-    public Profile createProfile(Profile profile) {
-        return profileRepository.save(profile);
+    @PostMapping
+    public ResponseEntity<Profile> createProfile(@RequestBody Profile profile) {
+        Profile createdProfile = profileService.createProfile(profile);
+        return new ResponseEntity<>(createdProfile, HttpStatus.CREATED);
     }
 
-    @Override
-    public SearchResponse<Profile> searchProfiles(SearchRequest searchRequest) {
-        CriteriaBuilder cb = entityManager.getCriteriaBuilder();
-        CriteriaQuery<Profile> query = cb.createQuery(Profile.class);
-        Root<Profile> root = query.from(Profile.class);
-        query.select(root).where(buildPredicates(searchRequest.getSearchCriteria(), cb, root));
-
-        // Sort the results if sortColumn and sortDirection are provided
-        if (searchRequest.getSortColumn() != null && searchRequest.getSortDirection() != null) {
-            Sort sort = Sort.by(searchRequest.getSortDirection(), searchRequest.getSortColumn());
-            query.orderBy(getSortOrder(sort, cb, root));
-        }
-
-        TypedQuery<Profile> typedQuery = entityManager.createQuery(query);
-
-        // Calculate the total number of results without pagination
-        int totalResults = typedQuery.getResultList().size();
-
-        // Perform manual pagination
-        int page = searchRequest.getPage();
-        int pageSize = searchRequest.getPageSize();
-        int startPosition = page * pageSize;
-
-        typedQuery.setFirstResult(startPosition);
-        typedQuery.setMaxResults(pageSize);
-
-        List<Profile> resultList = typedQuery.getResultList();
-
-        SearchResponse<Profile> searchResponse = new SearchResponse<>();
-        searchResponse.setData(new PageImpl<>(resultList, PageRequest.of(page, pageSize), totalResults));
-        searchResponse.setTotalElements((long) totalResults);
-        searchResponse.setTotalPages((int) Math.ceil((double) totalResults / pageSize));
-
-        return searchResponse;
-    }
-
-    private Predicate[] buildPredicates(List<SearchCriteria> searchCriteria, CriteriaBuilder cb, Root<Profile> root) {
-        // ... (same as before)
-    }
-
-    private Object convertToProperType(Object value) {
-        // ... (same as before)
-    }
-
-    private List<String> convertToProperTypeList(Object value) {
-        // ... (same as before)
-    }
-
-    private List<javax.persistence.criteria.Order> getSortOrder(Sort sort, CriteriaBuilder cb, Root<Profile> root) {
-        // ... (same as before)
+    @PostMapping("/search")
+    public ResponseEntity<SearchResponse<Profile>> searchProfiles(@RequestBody SearchRequest searchRequest) {
+        SearchResponse<Profile> searchResponse = profileService.searchProfiles(searchRequest);
+        return new ResponseEntity<>(searchResponse, HttpStatus.OK);
     }
 }
 
 
-
-##############################################################################################
-
-
-import javax.persistence.AttributeConverter;
-import javax.persistence.Converter;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-
-@Converter
-public class LocalDateToStringConverter implements AttributeConverter<LocalDate, String> {
-
-    private static final DateTimeFormatter DATE_FORMATTER = DateTimeFormatter.ofPattern("dd--MM--yyyy");
-
-    @Override
-    public String convertToDatabaseColumn(LocalDate attribute) {
-        return attribute != null ? attribute.format(DATE_FORMATTER) : null;
-    }
-
-    @Override
-    public LocalDate convertToEntityAttribute(String dbData) {
-        return dbData != null ? LocalDate.parse(dbData, DATE_FORMATTER) : null;
-    }
-}
-
-
-import javax.persistence.*;
-import java.time.LocalDate;
-import java.time.format.DateTimeFormatter;
-import java.util.Set;
-
-@Entity
-@Table(name = "profile")
-public class Profile {
-    @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
-    private Long id;
-
-    private String name;
-
-    @Column(name = "dob")
-    @Convert(converter = LocalDateToStringConverter.class)
-    private LocalDate dateOfBirth;
-
-    private String status;
-
-    @ElementCollection
-    @CollectionTable(name = "profile_source_list", joinColumns = @JoinColumn(name = "profile_id"))
-    @Column(name = "source_list")
-    private Set<String> sourceListAttribute;
-
-    private String countries;
-
-    @Column(name = "class")
-    private String profileClass;
-
-    @Column(name = "creation_date")
-    @Convert(converter = LocalDateToStringConverter.class)
-    private LocalDate creationDate;
-
-    @Column(name = "last_updated_date")
-    @Convert(converter = LocalDateToStringConverter.class)
-    private LocalDate lastUpdatedDate;
-
-    // Getters (no setters for read-only properties) and other methods...
-}
