@@ -1,0 +1,182 @@
+Controller ############################################
+
+@RunWith(SpringRunner.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+public class ProfileControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ProfileService profileService;
+
+    @Test
+    public void testCreateProfile() throws Exception {
+        // Given
+        String requestBody = "{\"name\":\"John Doe\",\"dateOfBirth\":\"01-01-1985\",\"status\":\"Active\",\"sourceListAttribute\":[\"Source 1\",\"Source 2\"],\"countries\":\"USA\",\"profileClass\":\"Class A\",\"creationDate\":\"01-07-2023\",\"lastUpdatedDate\":\"15-07-2023\"}";
+
+        // When and Then
+        mockMvc.perform(MockMvcRequestBuilders.post("/profiles")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+                .andExpect(MockMvcResultMatchers.status().isCreated())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.id").exists())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.name").value("John Doe"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.dateOfBirth").value("01-01-1985"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.status").value("Active"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.sourceListAttribute").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.sourceListAttribute", Matchers.containsInAnyOrder("Source 1", "Source 2")))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.countries").value("USA"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.profileClass").value("Class A"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.creationDate").value("01-07-2023"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.lastUpdatedDate").value("15-07-2023"));
+    }
+
+    @Test
+    public void testSearchProfiles() throws Exception {
+        // Given
+        Profile profile1 = new Profile();
+        profile1.setName("John Doe");
+        profile1.setDateOfBirth("01-01-1985");
+        profile1.setStatus("Active");
+        profile1.setSourceListAttribute(new HashSet<>(Arrays.asList("Source 1", "Source 2")));
+        profile1.setCountries("USA");
+        profile1.setProfileClass("Class A");
+        profile1.setCreationDate("01-07-2023");
+        profile1.setLastUpdatedDate("15-07-2023");
+        profileService.createProfile(profile1);
+
+        Profile profile2 = new Profile();
+        profile2.setName("Jane Smith");
+        profile2.setDateOfBirth("10-05-1990");
+        profile2.setStatus("Inactive");
+        profile2.setSourceListAttribute(new HashSet<>(Arrays.asList("Source 3", "Source 4")));
+        profile2.setCountries("Canada");
+        profile2.setProfileClass("Class B");
+        profile2.setCreationDate("01-07-2023");
+        profile2.setLastUpdatedDate("15-07-2023");
+        profileService.createProfile(profile2);
+
+        String requestBody = "{\"criteriaList\":[{\"queryKey\":\"name\",\"queryOperation\":\"CONTAINS\",\"queryValue\":\"John\"},{\"queryKey\":\"status\",\"queryOperation\":\"EQUALS\",\"queryValue\":\"Active\"},{\"queryKey\":\"sourceListAttribute\",\"queryOperation\":\"IN\",\"queryValue\":[\"Source 1\",\"Source 2\"]},{\"queryKey\":\"dateOfBirth\",\"queryOperation\":\"BETWEEN\",\"queryValue\":[\"01-01-1980\",\"31-12-1990\"]}],\"pageNumber\":1,\"pageSize\":10,\"sortColumn\":\"name\",\"sortDirection\":\"ASC\"}";
+
+        // When and Then
+        mockMvc.perform(MockMvcRequestBuilders.post("/profiles/search")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(requestBody))
+                .andExpect(MockMvcResultMatchers.status().isOk())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.totalElements").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.totalPages").value(1))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].name").value("John Doe"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].dateOfBirth").value("01-01-1985"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].status").value("Active"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].sourceListAttribute").isArray())
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].sourceListAttribute", Matchers.containsInAnyOrder("Source 1", "Source 2")))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].countries").value("USA"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].profileClass").value("Class A"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].creationDate").value("01-07-2023"))
+                .andExpect(MockMvcResultMatchers.jsonPath("$.data.content[0].lastUpdatedDate").value("15-07-2023"));
+    }
+}
+
+
+################################################ SERVICE #################################33
+
+@RunWith(SpringRunner.class)
+@SpringBootTest
+@AutoConfigureMockMvc
+public class ProfileServiceTest {
+
+    @Autowired
+    private ProfileService profileService;
+
+    @Autowired
+    private ProfileRepository profileRepository;
+
+    @Test
+    public void testCreateProfile() {
+        // Given
+        Profile profile = new Profile();
+        profile.setName("John Doe");
+        profile.setDateOfBirth("01-01-1985");
+        profile.setStatus("Active");
+        profile.setSourceListAttribute(new HashSet<>(Arrays.asList("Source 1", "Source 2")));
+        profile.setCountries("USA");
+        profile.setProfileClass("Class A");
+        profile.setCreationDate("01-07-2023");
+        profile.setLastUpdatedDate("15-07-2023");
+
+        // When
+        Profile createdProfile = profileService.createProfile(profile);
+
+        // Then
+        assertNotNull(createdProfile.getId());
+        assertEquals("John Doe", createdProfile.getName());
+        assertEquals("01-01-1985", createdProfile.getDateOfBirth());
+        assertEquals("Active", createdProfile.getStatus());
+        assertEquals(new HashSet<>(Arrays.asList("Source 1", "Source 2")), createdProfile.getSourceListAttribute());
+        assertEquals("USA", createdProfile.getCountries());
+        assertEquals("Class A", createdProfile.getProfileClass());
+        assertEquals("01-07-2023", createdProfile.getCreationDate());
+        assertEquals("15-07-2023", createdProfile.getLastUpdatedDate());
+    }
+
+    @Test
+    public void testSearchProfiles() {
+        // Given
+        Profile profile1 = new Profile();
+        profile1.setName("John Doe");
+        profile1.setDateOfBirth("01-01-1985");
+        profile1.setStatus("Active");
+        profile1.setSourceListAttribute(new HashSet<>(Arrays.asList("Source 1", "Source 2")));
+        profile1.setCountries("USA");
+        profile1.setProfileClass("Class A");
+        profile1.setCreationDate("01-07-2023");
+        profile1.setLastUpdatedDate("15-07-2023");
+        profileService.createProfile(profile1);
+
+        Profile profile2 = new Profile();
+        profile2.setName("Jane Smith");
+        profile2.setDateOfBirth("10-05-1990");
+        profile2.setStatus("Inactive");
+        profile2.setSourceListAttribute(new HashSet<>(Arrays.asList("Source 3", "Source 4")));
+        profile2.setCountries("Canada");
+        profile2.setProfileClass("Class B");
+        profile2.setCreationDate("01-07-2023");
+        profile2.setLastUpdatedDate("15-07-2023");
+        profileService.createProfile(profile2);
+
+        // When
+        SearchRequest searchRequest = new SearchRequest();
+        List<SearchCriteria> criteriaList = new ArrayList<>();
+        criteriaList.add(new SearchCriteria("name", QueryOperation.CONTAINS, "John"));
+        criteriaList.add(new SearchCriteria("status", QueryOperation.EQUALS, "Active"));
+        criteriaList.add(new SearchCriteria("sourceListAttribute", QueryOperation.IN,
+                new ArrayList<>(Arrays.asList("Source 1", "Source 2"))));
+        criteriaList.add(new SearchCriteria("dateOfBirth", QueryOperation.BETWEEN,
+                new ArrayList<>(Arrays.asList("01-01-1980", "31-12-1990"))));
+        searchRequest.setCriteriaList(criteriaList);
+        searchRequest.setPageNumber(1);
+        searchRequest.setPageSize(10);
+        searchRequest.setSortColumn("name");
+        searchRequest.setSortDirection(SortDirection.ASC);
+
+        SearchResponse<Profile> searchResponse = profileService.searchProfiles(searchRequest);
+
+        // Then
+        Page<Profile> profiles = searchResponse.getData();
+        assertEquals(1, profiles.getTotalElements());
+        assertEquals(1, profiles.getTotalPages());
+        assertEquals(1, profiles.getContent().size());
+
+        Profile foundProfile = profiles.getContent().get(0);
+        assertEquals("John Doe", foundProfile.getName());
+        assertEquals("01-01-1985", foundProfile.getDateOfBirth());
+        assertEquals("Active", foundProfile.getStatus());
+        assertEquals(new HashSet<>(Arrays.asList("Source 1", "Source 2")), foundProfile.getSourceListAttribute());
+        assertEquals("USA", foundProfile.getCountries());
+        assertEquals("Class A", foundProfile.getProfileClass());
+        assertEquals("01-07-2023", foundProfile.getCreationDate());
+        assertEquals("15-07-2023", foundProfile.getLastUpdatedDate());
+    }
+}
