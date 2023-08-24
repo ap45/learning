@@ -1,0 +1,76 @@
+public class SearchCriteria {
+    private String queryColumn;
+    private String queryOperation;
+    private Object queryValue;
+
+    // Getters and setters
+}
+
+@Service
+public class ProfileService {
+
+    @Autowired
+    private EntityManagerFactory entityManagerFactory;
+
+    public List<Profile> searchProfiles(List<SearchCriteria> searchCriteriaList) {
+        EntityManager entityManager = entityManagerFactory.createEntityManager();
+        List<Profile> profiles = null;
+
+        try {
+            entityManager.getTransaction().begin();
+
+            CriteriaBuilder criteriaBuilder = entityManager.getCriteriaBuilder();
+            CriteriaQuery<Profile> criteriaQuery = criteriaBuilder.createQuery(Profile.class);
+            Root<Profile> root = criteriaQuery.from(Profile.class);
+
+            // Build the criteria query dynamically based on search criteria
+            Predicate predicate = criteriaBuilder.conjunction();
+            for (SearchCriteria criteria : searchCriteriaList) {
+                Path<String> column = root.get(criteria.getQueryColumn());
+                switch (criteria.getQueryOperation()) {
+                    case "=":
+                        predicate = criteriaBuilder.and(predicate, criteriaBuilder.equal(column, criteria.getQueryValue()));
+                        break;
+                    // Add more cases for other operations like ">", "<", "LIKE", etc.
+                }
+            }
+            criteriaQuery.where(predicate);
+
+            profiles = entityManager.createQuery(criteriaQuery).getResultList();
+
+            // Load related data using the fetched profiles
+            profiles.forEach(profile -> {
+                Hibernate.initialize(profile.getPosts());
+                Hibernate.initialize(profile.getContactInfo());
+                Hibernate.initialize(profile.getInterests());
+            });
+
+            entityManager.getTransaction().commit();
+        } catch (Exception e) {
+            if (entityManager.getTransaction().isActive()) {
+                entityManager.getTransaction().rollback();
+            }
+        } finally {
+            entityManager.close();
+        }
+
+        return profiles;
+    }
+}
+@RestController
+@RequestMapping("/api/profiles")
+public class ProfileController {
+
+    @Autowired
+    private ProfileService profileService;
+
+    @PostMapping("/search")
+    public ResponseEntity<List<Profile>> searchProfiles(@RequestBody List<SearchCriteria> searchCriteriaList) {
+        List<Profile> profiles = profileService.searchProfiles(searchCriteriaList);
+        if (!profiles.isEmpty()) {
+            return ResponseEntity.ok(profiles);
+        } else {
+            return ResponseEntity.notFound().build();
+        }
+    }
+}
