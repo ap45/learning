@@ -1,0 +1,108 @@
+-- Create the parent table
+CREATE TABLE Profile (
+    profile_id INT PRIMARY KEY,
+    name VARCHAR(50)
+);
+
+-- Create the first child table with many-to-many relationship
+CREATE TABLE Interests (
+    interest_id INT PRIMARY KEY,
+    interest_name VARCHAR(50)
+);
+
+-- Create the bridge table for the many-to-many relationship
+CREATE TABLE Profile_Interests (
+    profile_id INT,
+    interest_id INT,
+    PRIMARY KEY (profile_id, interest_id),
+    FOREIGN KEY (profile_id) REFERENCES Profile(profile_id),
+    FOREIGN KEY (interest_id) REFERENCES Interests(interest_id)
+);
+
+-- Create the second child table with one-to-many relationship
+CREATE TABLE Posts (
+    post_id INT PRIMARY KEY,
+    profile_id INT,
+    content TEXT,
+    FOREIGN KEY (profile_id) REFERENCES Profile(profile_id)
+);
+
+-- Create the third child table with one-to-one relationship
+CREATE TABLE ContactInfo (
+    contact_id INT PRIMARY KEY,
+    profile_id INT UNIQUE,
+    email VARCHAR(100),
+    phone VARCHAR(20),
+    FOREIGN KEY (profile_id) REFERENCES Profile(profile_id)
+);
+
+
+
+-- Insert data into Profile table
+INSERT INTO Profile (profile_id, name)
+VALUES (1, 'John'),
+       (2, 'Jane'),
+       (3, 'Alice');
+
+-- Insert data into Interests table
+INSERT INTO Interests (interest_id, interest_name)
+VALUES (1, 'Sports'),
+       (2, 'Music'),
+       (3, 'Travel');
+
+-- Insert data into Profile_Interests table
+INSERT INTO Profile_Interests (profile_id, interest_id)
+VALUES (1, 1),
+       (1, 2),
+       (2, 2),
+       (3, 3);
+
+-- Insert data into Posts table
+INSERT INTO Posts (post_id, profile_id, content)
+VALUES (1, 1, 'Enjoying the game!'),
+       (2, 1, 'Concert was amazing!'),
+       (3, 2, 'Exploring a new city.'),
+       (4, 3, 'Nature hike today.');
+
+-- Insert data into ContactInfo table
+INSERT INTO ContactInfo (contact_id, profile_id, email, phone)
+VALUES (1, 1, 'john@example.com', '123-456-7890'),
+       (2, 2, 'jane@example.com', '987-654-3210'),
+       (3, 3, 'alice@example.com', '555-123-4567');
+
+-- Insert data into Profile table
+INSERT INTO Profile (profile_id, name)
+VALUES (4, 'Michael'),
+       (5, 'Emily'),
+       (6, 'David'),
+       (7, 'Sophia');
+
+-- Insert data into Interests table
+INSERT INTO Interests (interest_id, interest_name)
+VALUES (4, 'Cooking'),
+       (5, 'Art'),
+       (6, 'Reading'),
+       (7, 'Fitness');
+
+-- Insert data into Profile_Interests table
+INSERT INTO Profile_Interests (profile_id, interest_id)
+VALUES (4, 4),
+       (4, 5),
+       (5, 6),
+       (6, 7),
+       (7, 1),
+       (7, 3);
+
+-- Insert data into Posts table
+INSERT INTO Posts (post_id, profile_id, content)
+VALUES (5, 4, 'Trying out new recipes.'),
+       (6, 5, 'Finished reading a great book.'),
+       (7, 6, 'Working on my fitness goals.'),
+       (8, 7, 'Attended a thrilling sports match.');
+
+-- Insert data into ContactInfo table
+INSERT INTO ContactInfo (contact_id, profile_id, email, phone)
+VALUES (4, 4, 'michael@example.com', '444-555-1234'),
+       (5, 5, 'emily@example.com', '777-888-5678'),
+       (6, 6, 'david@example.com', '222-333-9876'),
+       (7, 7, 'sophia@example.com', '111-222-3333');
