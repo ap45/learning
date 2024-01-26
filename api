@@ -9,3 +9,4 @@
     "timeZone": "UTC"
   }
 }
+select=subject,organizer,start,end,showAs
