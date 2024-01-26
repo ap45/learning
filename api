@@ -1,12 +1,1 @@
-{
-  "schedules": ["user_id"],
-  "startTime": {
-    "dateTime": "2024-01-26T08:00:00",
-    "timeZone": "UTC"
-  },
-  "endTime": {
-    "dateTime": "2024-01-26T17:00:00",
-    "timeZone": "UTC"
-  }
-}
-select=subject,organizer,start,end,showAs
+GET https://graph.microsoft.com/v1.0/me/calendarView?startDateTime=2024-01-26T00:00:00&endDateTime=2024-01-26T23:59:59&$select=subject,organizer,start,end,showAs
