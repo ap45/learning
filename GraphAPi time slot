@@ -1,0 +1,196 @@
+/////////MicrosoftGraphResponse.java/////////
+
+import java.util.List;
+
+public class MicrosoftGraphResponse {
+    private List<Event> value;
+
+    public List<Event> getEvents() {
+        return value;
+    }
+
+    public void setEvents(List<Event> value) {
+        this.value = value;
+    }
+}
+
+//////////Event.java://////////
+
+
+public class Event {
+    private DateTime start;
+    private DateTime end;
+
+    public DateTime getStart() {
+        return start;
+    }
+
+    public void setStart(DateTime start) {
+        this.start = start;
+    }
+
+    public DateTime getEnd() {
+        return end;
+    }
+
+    public void setEnd(DateTime end) {
+        this.end = end;
+    }
+}
+
+
+
+//////////DateTime.java: /////////////////
+public class DateTime {
+    private String dateTime;
+
+    public String getDateTime() {
+        return dateTime;
+    }
+
+    public void setDateTime(String dateTime) {
+        this.dateTime = dateTime;
+    }
+}
+
+//////// TimeSlot.java /////////////////
+
+public class TimeSlot {
+    private String startTime;
+    private String endTime;
+    private boolean isFree;
+
+    public TimeSlot(String startTime, String endTime, boolean isFree) {
+        this.startTime = startTime;
+        this.endTime = endTime;
+        this.isFree = isFree;
+    }
+
+    public String getStartTime() {
+        return startTime;
+    }
+
+    public String getEndTime() {
+        return endTime;
+    }
+
+    public boolean isFree() {
+        return isFree;
+    }
+}
+
+///////// InterviewSchedulerController.java ////////////////
+
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.client.RestTemplate;
+
+import java.time.Duration;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.ArrayList;
+import java.util.List;
+
+@RestController
+@RequestMapping("/interview-scheduler")
+public class InterviewSchedulerController {
+
+    private final String graphApiEndpoint = "https://graph.microsoft.com/v1.0/me/calendarView";
+    private final String accessToken = "YOUR_ACCESS_TOKEN"; // Replace with your actual access token
+
+    @GetMapping("/slots")
+    public SlotsResponse getSlots() {
+        ZonedDateTime istStartTime = ZonedDateTime.parse("2024-01-31T09:00:00+05:30[Asia/Kolkata]");
+        ZonedDateTime istEndTime = ZonedDateTime.parse("2024-01-31T18:00:00+05:30[Asia/Kolkata]");
+
+        String apiUrl = String.format("%s?startDateTime=%s&endDateTime=%s", graphApiEndpoint, istStartTime, istEndTime);
+
+        RestTemplate restTemplate = new RestTemplate();
+        MicrosoftGraphResponse response = restTemplate.getForObject(apiUrl, MicrosoftGraphResponse.class);
+
+        List<TimeSlot> busySlots = new ArrayList<>();
+        List<TimeSlot> freeSlots = new ArrayList<>();
+
+        if (response != null && response.getEvents() != null) {
+            for (Event event : response.getEvents()) {
+                ZonedDateTime busyStartTime = convertUtcToIst(event.getStart().getDateTime());
+                ZonedDateTime busyEndTime = convertUtcToIst(event.getEnd().getDateTime());
+
+                busySlots.add(new TimeSlot(
+                        busyStartTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                        busyEndTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                        false
+                ));
+            }
+        }
+
+        findFreeSlots(busySlots, freeSlots, istStartTime, istEndTime);
+
+        SlotsResponse slotsResponse = new SlotsResponse();
+        slotsResponse.setBusySlots(busySlots);
+        slotsResponse.setFreeSlots(freeSlots);
+
+        return slotsResponse;
+    }
+
+    private ZonedDateTime convertUtcToIst(String utcTime) {
+        ZonedDateTime utcDateTime = ZonedDateTime.parse(utcTime);
+        return utcDateTime.withZoneSameInstant(ZoneId.of("Asia/Kolkata"));
+    }
+
+    private void findFreeSlots(List<TimeSlot> busySlots, List<TimeSlot> freeSlots, ZonedDateTime startTime, ZonedDateTime endTime) {
+        Duration slotDuration = Duration.ofHours(1);
+        ZonedDateTime currentTime = startTime;
+
+        for (TimeSlot busySlot : busySlots) {
+            ZonedDateTime busyStartTime = ZonedDateTime.parse(busySlot.getStartTime());
+            ZonedDateTime busyEndTime = ZonedDateTime.parse(busySlot.getEndTime());
+
+            if (currentTime.isBefore(busyStartTime)) {
+                ZonedDateTime freeEndTime = currentTime.plus(slotDuration);
+                freeSlots.add(new TimeSlot(
+                        currentTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                        freeEndTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                        true
+                ));
+            }
+
+            currentTime = busyEndTime;
+        }
+
+        if (currentTime.isBefore(endTime)) {
+            ZonedDateTime freeEndTime = currentTime.plus(slotDuration);
+            freeSlots.add(new TimeSlot(
+                    currentTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                    freeEndTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                    true
+            ));
+        }
+    }
+}
+///////////////SlotsResponse.java ////////////////////////////////
+
+import java.util.List;
+
+public class SlotsResponse {
+    private List<TimeSlot> busySlots;
+    private List<TimeSlot> freeSlots;
+
+    public List<TimeSlot> getBusySlots() {
+        return busySlots;
+    }
+
+    public void setBusySlots(List<TimeSlot> busySlots) {
+        this.busySlots = busySlots;
+    }
+
+    public List<TimeSlot> getFreeSlots() {
+        return freeSlots;
+    }
+
+    public void setFreeSlots(List<TimeSlot> freeSlots) {
+        this.freeSlots = freeSlots;
+    }
+}
