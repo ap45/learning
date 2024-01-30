@@ -190,6 +190,66 @@ public class SlotsResponse {
         return freeSlots;
     }
 
+////////////////////////////////////////////////////////
+// ... (previous imports)
+
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.RequestEntity;
+import org.springframework.web.client.RequestCallback;
+
+@RestController
+@RequestMapping("/interview-scheduler")
+public class InterviewSchedulerController {
+
+    private final String graphApiEndpoint = "https://graph.microsoft.com/v1.0/me/calendarView";
+    private final String accessToken = "YOUR_ACCESS_TOKEN"; // Replace with your actual access token
+
+    @GetMapping("/slots")
+    public SlotsResponse getSlots() {
+        ZonedDateTime istStartTime = ZonedDateTime.parse("2024-01-31T09:00:00+05:30[Asia/Kolkata]");
+        ZonedDateTime istEndTime = ZonedDateTime.parse("2024-01-31T18:00:00+05:30[Asia/Kolkata]");
+
+        String apiUrl = String.format("%s?startDateTime=%s&endDateTime=%s", graphApiEndpoint, istStartTime, istEndTime);
+
+        RestTemplate restTemplate = new RestTemplate();
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setBearerAuth(accessToken);
+
+        RequestEntity<Void> requestEntity = new RequestEntity<>(headers, HttpMethod.GET, null, Void.class);
+
+        MicrosoftGraphResponse response = restTemplate.exchange(apiUrl, HttpMethod.GET, requestEntity, MicrosoftGraphResponse.class).getBody();
+
+        List<TimeSlot> busySlots = new ArrayList<>();
+        List<TimeSlot> freeSlots = new ArrayList<>();
+
+        if (response != null && response.getEvents() != null) {
+            for (Event event : response.getEvents()) {
+                ZonedDateTime busyStartTime = convertUtcToIst(event.getStart().getDateTime());
+                ZonedDateTime busyEndTime = convertUtcToIst(event.getEnd().getDateTime());
+
+                busySlots.add(new TimeSlot(
+                        busyStartTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                        busyEndTime.format(DateTimeFormatter.ofPattern("yyyy-MM-dd hh:mm:ss a")),
+                        false
+                ));
+            }
+        }
+
+        findFreeSlots(busySlots, freeSlots, istStartTime, istEndTime);
+
+        SlotsResponse slotsResponse = new SlotsResponse();
+        slotsResponse.setBusySlots(busySlots);
+        slotsResponse.setFreeSlots(freeSlots);
+
+        return slotsResponse;
+    }
+
+    // ... (rest of the methods)
+}
+
+
     public void setFreeSlots(List<TimeSlot> freeSlots) {
         this.freeSlots = freeSlots;
     }
