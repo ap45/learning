@@ -104,6 +104,9 @@ public class InterviewSchedulerController {
     public SlotsResponse getSlots() {
         ZonedDateTime istStartTime = ZonedDateTime.parse("2024-01-31T09:00:00+05:30[Asia/Kolkata]");
         ZonedDateTime istEndTime = ZonedDateTime.parse("2024-01-31T18:00:00+05:30[Asia/Kolkata]");
+ZonedDateTime utcStartTime = istStartTime.withZoneSameInstant(ZoneId.of("UTC"));
+        ZonedDateTime utcEndTime = istEndTime.withZoneSameInstant(ZoneId.of("UTC"));
+
 
         String apiUrl = String.format("%s?startDateTime=%s&endDateTime=%s", graphApiEndpoint, istStartTime, istEndTime);
 
